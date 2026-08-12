@@ -47,7 +47,14 @@ AuVoShopwareAboutPage = AuVoShopware about page
 #
 AuVoShopwareArea = Shopware sync
 AuVoShopwareNotConfigured = The Shopware connection is not fully configured yet. Please complete the <a href="%s">module setup</a> first.
-AuVoShopwareConnectionSummary = Connection summary
-AuVoShopwareSyncNotImplementedYet = Connection is configured. Product and order synchronization will appear here once the Shopware sync classes are implemented (see PLAN.md).
 AuVoShopwareSyncCronLabel = Sync with Shopware
-AuVoShopwareSyncCronComment = Runs AuVoShopware's product and order sync. Disabled by default until the sync classes are implemented.
+AuVoShopwareSyncCronComment = Runs AuVoShopware's product and order sync. Disabled by default until the full sync (variants, orders) is implemented.
+AuVoShopwareSyncAll = Synchronize all
+AuVoShopwareSyncOne = Sync
+AuVoShopwareSyncOneOk = Product synchronized successfully
+AuVoShopwareSyncOneError = Synchronization failed: %s
+AuVoShopwareSyncAllResult = Synchronization done: %s OK, %s skipped (unchanged), %s error(s)
+AuVoShopwareNoProductInScope = No product found in the configured category
+AuVoShopwareNeverSynced = Not synced yet
+AuVoShopwareSwProductId = Shopware product ID
+AuVoShopwareLastSync = Last sync
