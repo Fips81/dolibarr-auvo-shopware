@@ -18,16 +18,16 @@
 require_once DOL_DOCUMENT_ROOT.'/product/class/product.class.php';
 require_once DOL_DOCUMENT_ROOT.'/categories/class/categorie.class.php';
 require_once DOL_DOCUMENT_ROOT.'/variants/class/ProductCombination.class.php';
+require_once DOL_DOCUMENT_ROOT.'/core/lib/files.lib.php';
 
 /**
  * \file    auvoshopware/class/ShopwareProductSync.class.php
  * \ingroup auvoshopware
  * \brief   Push Dolibarr products (scoped by category) to Shopware via the Sync API.
  *
- * First cut (PLAN.md phase 4, "start small"): plain products only - no category mirroring, no
- * variants, no images yet (those are follow-up steps once this shape is confirmed working
- * live). Category/tax/sales-channel assignment already happens here where it's essentially
- * free (part of the same product payload), variants and images do not.
+ * First cut (PLAN.md phase 4, "start small"): plain products + images, no category mirroring,
+ * no variants yet (those are follow-up steps once this shape is confirmed working live).
+ * Category/tax/sales-channel/images assignment already happens here, variants do not.
  */
 class ShopwareProductSync
 {
@@ -166,15 +166,130 @@ class ShopwareProductSync
 	}
 
 	/**
+	 * Deterministic id for a product image's underlying media entity (the file itself).
+	 *
+	 * @param string $ref
+	 * @param string $filename
+	 * @return string
+	 */
+	protected function mediaUuid($ref, $filename)
+	{
+		return md5('auvoshopware-media-'.$ref.'-'.$filename);
+	}
+
+	/**
+	 * Deterministic id for a product image's product_media join row (product+media+position).
+	 * Same "nested to-many association needs its own stable id too" rule as visibilityUuid().
+	 *
+	 * @param string $ref
+	 * @param string $filename
+	 * @return string
+	 */
+	protected function productMediaUuid($ref, $filename)
+	{
+		return md5('auvoshopware-product-media-'.$ref.'-'.$filename);
+	}
+
+	/**
+	 * Upload any product image files not yet known to Shopware (per the local sw_images map),
+	 * and return the "media" association list + cover id to merge into the product payload.
+	 *
+	 * Two Admin API calls per new image, both outside the main product Sync API call: (1)
+	 * sync()-upsert an empty 'media' entity with a deterministic id, (2) upload the raw file
+	 * bytes into it (ShopwareClient::uploadMediaFile()). Both must happen before the product
+	 * upsert that references the media id as a foreign key.
+	 *
+	 * @param Product $product
+	 * @return array{associations: array<int, array{id: string, mediaId: string, position: int}>, coverId: ?string, images: array<string, string>, error: ?string}
+	 */
+	protected function pushImages(Product $product)
+	{
+		global $conf;
+
+		$entity = $product->entity ?: $conf->entity;
+		$productDir = $conf->product->multidir_output[$entity].'/'.dol_sanitizeFileName($product->ref);
+
+		$files = dol_dir_list($productDir, 'files', 0, '\.(jpg|jpeg|png|gif|webp|bmp)$');
+		if (empty($files) || !is_array($files)) {
+			return array('associations' => array(), 'coverId' => null, 'images' => array(), 'error' => null);
+		}
+		sort($files);
+
+		$map = $this->getMapRow($product->id);
+		$existingImages = array();
+		if (!empty($map['sw_images'])) {
+			$decoded = json_decode($map['sw_images'], true);
+			if (is_array($decoded)) {
+				$existingImages = $decoded;
+			}
+		}
+
+		$errors = array();
+		foreach ($files as $file) {
+			$filename = $file['name'] ?? null;
+			if (empty($filename) || isset($existingImages[$filename])) {
+				continue;
+			}
+
+			$mediaId = $this->mediaUuid($product->ref, $filename);
+
+			$createResult = $this->client->sync(array(
+				'upsert-media' => array(
+					'entity' => 'media',
+					'action' => 'upsert',
+					'payload' => array(array('id' => $mediaId)),
+				),
+			));
+			if ($createResult === false) {
+				$errors[] = $filename.': '.$this->client->error;
+				continue;
+			}
+
+			$extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+			$fileNameNoExt = pathinfo($filename, PATHINFO_FILENAME);
+			if ($this->client->uploadMediaFile($mediaId, $productDir.'/'.$filename, $fileNameNoExt, $extension)) {
+				$existingImages[$filename] = $mediaId;
+			} else {
+				$errors[] = $filename.': '.$this->client->error;
+			}
+		}
+
+		$associations = array();
+		$coverId = null;
+		$position = 0;
+		foreach ($existingImages as $filename => $mediaId) {
+			$productMediaId = $this->productMediaUuid($product->ref, $filename);
+			$associations[] = array(
+				'id' => $productMediaId,
+				'mediaId' => $mediaId,
+				'position' => $position,
+			);
+			if ($position === 0) {
+				$coverId = $productMediaId;
+			}
+			$position++;
+		}
+
+		return array(
+			'associations' => $associations,
+			'coverId' => $coverId,
+			'images' => $existingImages,
+			'error' => empty($errors) ? null : implode('; ', $errors),
+		);
+	}
+
+	/**
 	 * Build the Sync API payload for one product. Minimal required fields for
 	 * Product.upsert: id, productNumber, name, stock, taxId, price. "visibilities" makes the
 	 * product visible/purchasable in the configured sales channel (AUVOSHOPWARE_SW_SALES_CHANNEL_ID) -
-	 * without it, a product exists in Shopware but never shows up in the shop.
+	 * without it, a product exists in Shopware but never shows up in the shop. "media"/"coverId"
+	 * come from pushImages() (already-uploaded images only).
 	 *
 	 * @param Product $product
+	 * @param array{associations: array<int, array{id: string, mediaId: string, position: int}>, coverId: ?string} $mediaResult
 	 * @return array<string, mixed>
 	 */
-	public function buildProductPayload(Product $product)
+	public function buildProductPayload(Product $product, array $mediaResult = array())
 	{
 		$payload = array(
 			'id' => $this->productUuid($product->ref),
@@ -205,6 +320,13 @@ class ShopwareProductSync
 			);
 		}
 
+		if (!empty($mediaResult['associations'])) {
+			$payload['media'] = $mediaResult['associations'];
+			if (!empty($mediaResult['coverId'])) {
+				$payload['coverId'] = $mediaResult['coverId'];
+			}
+		}
+
 		return $payload;
 	}
 
@@ -217,6 +339,20 @@ class ShopwareProductSync
 	 */
 	protected function computeContentHash(Product $product)
 	{
+		global $conf;
+
+		$entity = $product->entity ?: $conf->entity;
+		$productDir = $conf->product->multidir_output[$entity].'/'.dol_sanitizeFileName($product->ref);
+
+		$files = dol_dir_list($productDir, 'files', 0, '\.(jpg|jpeg|png|gif|webp|bmp)$');
+		$imageSignature = array();
+		if (is_array($files)) {
+			foreach ($files as $file) {
+				$imageSignature[] = ($file['name'] ?? '').':'.($file['size'] ?? 0);
+			}
+			sort($imageSignature);
+		}
+
 		$data = implode('|', array(
 			$product->ref,
 			$product->label,
@@ -227,6 +363,7 @@ class ShopwareProductSync
 			(string) getDolGlobalString('AUVOSHOPWARE_SW_SALES_CHANNEL_ID'),
 			$product->status ? '1' : '0',
 			(string) $product->stock_reel,
+			implode(',', $imageSignature),
 		));
 
 		return md5($data);
@@ -256,17 +393,27 @@ class ShopwareProductSync
 			}
 		}
 
+		$mediaResult = $this->pushImages($product);
+		// Persist whatever uploaded successfully even if the product upsert below fails, so a
+		// retry doesn't re-upload files that are already in Shopware.
+		$this->saveMapImages($product->id, $mediaResult['images']);
+
 		$result = $this->client->sync(array(
 			'upsert-product' => array(
 				'entity' => 'product',
 				'action' => 'upsert',
-				'payload' => array($this->buildProductPayload($product)),
+				'payload' => array($this->buildProductPayload($product, $mediaResult)),
 			),
 		));
 
 		if ($result === false) {
 			$this->saveMapRow($product->id, $swProductId, 'error', $this->client->error);
 			return array('status' => 'error', 'sw_product_id' => $swProductId, 'error' => $this->client->error);
+		}
+
+		if (!empty($mediaResult['error'])) {
+			$this->saveMapRow($product->id, $swProductId, 'error', 'Images: '.$mediaResult['error'], $contentHash);
+			return array('status' => 'error', 'sw_product_id' => $swProductId, 'error' => 'Images: '.$mediaResult['error']);
 		}
 
 		$this->saveMapRow($product->id, $swProductId, 'ok', null, $contentHash);
@@ -300,13 +447,13 @@ class ShopwareProductSync
 
 	/**
 	 * @param int $productId
-	 * @return array{sw_product_id: ?string, content_hash: ?string, last_sync_date: ?string, last_sync_status: ?string, last_sync_error: ?string}|null
+	 * @return array{sw_product_id: ?string, content_hash: ?string, sw_images: ?string, last_sync_date: ?string, last_sync_status: ?string, last_sync_error: ?string}|null
 	 */
 	public function getMapRow($productId)
 	{
 		global $conf;
 
-		$sql = 'SELECT sw_product_id, content_hash, last_sync_date, last_sync_status, last_sync_error';
+		$sql = 'SELECT sw_product_id, content_hash, sw_images, last_sync_date, last_sync_status, last_sync_error';
 		$sql .= ' FROM '.$this->db->prefix().'auvoshopware_product_map';
 		$sql .= ' WHERE fk_product = '.((int) $productId);
 		$sql .= ' AND entity = '.((int) $conf->entity);
@@ -316,6 +463,7 @@ class ShopwareProductSync
 			return array(
 				'sw_product_id' => $obj->sw_product_id,
 				'content_hash' => $obj->content_hash,
+				'sw_images' => $obj->sw_images,
 				'last_sync_date' => $obj->last_sync_date,
 				'last_sync_status' => $obj->last_sync_status,
 				'last_sync_error' => $obj->last_sync_error,
@@ -329,7 +477,7 @@ class ShopwareProductSync
 	 * Bulk variant of getMapRow(), for the dashboard's product list.
 	 *
 	 * @param int[] $productIds
-	 * @return array<int, array{sw_product_id: ?string, content_hash: ?string, last_sync_date: ?string, last_sync_status: ?string, last_sync_error: ?string}>
+	 * @return array<int, array{sw_product_id: ?string, content_hash: ?string, sw_images: ?string, last_sync_date: ?string, last_sync_status: ?string, last_sync_error: ?string}>
 	 */
 	public function getMapRows(array $productIds)
 	{
@@ -339,7 +487,7 @@ class ShopwareProductSync
 			return array();
 		}
 
-		$sql = 'SELECT fk_product, sw_product_id, content_hash, last_sync_date, last_sync_status, last_sync_error';
+		$sql = 'SELECT fk_product, sw_product_id, content_hash, sw_images, last_sync_date, last_sync_status, last_sync_error';
 		$sql .= ' FROM '.$this->db->prefix().'auvoshopware_product_map';
 		$sql .= ' WHERE fk_product IN ('.implode(',', array_map('intval', $productIds)).')';
 		$sql .= ' AND entity = '.((int) $conf->entity);
@@ -351,6 +499,7 @@ class ShopwareProductSync
 				$rows[(int) $obj->fk_product] = array(
 					'sw_product_id' => $obj->sw_product_id,
 					'content_hash' => $obj->content_hash,
+					'sw_images' => $obj->sw_images,
 					'last_sync_date' => $obj->last_sync_date,
 					'last_sync_status' => $obj->last_sync_status,
 					'last_sync_error' => $obj->last_sync_error,
@@ -359,6 +508,31 @@ class ShopwareProductSync
 		}
 
 		return $rows;
+	}
+
+	/**
+	 * Persist the filename => Shopware media id map for a product, so already-uploaded images
+	 * are recognized and skipped on the next sync (see pushImages()).
+	 *
+	 * @param int                  $productId
+	 * @param array<string,string> $images
+	 * @return void
+	 */
+	protected function saveMapImages($productId, array $images)
+	{
+		global $conf;
+
+		if ($this->getMapRow($productId) === null) {
+			// Ensure a row exists before UPDATE-ing it (mirrors the insert branch of saveMapRow()).
+			$this->saveMapRow($productId, null, 'pending', null);
+		}
+
+		$sql = 'UPDATE '.$this->db->prefix().'auvoshopware_product_map';
+		$sql .= " SET sw_images = '".$this->db->escape(json_encode($images))."'";
+		$sql .= ' WHERE fk_product = '.((int) $productId);
+		$sql .= ' AND entity = '.((int) $conf->entity);
+
+		$this->db->query($sql);
 	}
 
 	/**

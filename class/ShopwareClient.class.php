@@ -246,6 +246,76 @@ class ShopwareClient
 	}
 
 	/**
+	 * Upload the binary content of a file into an already-existing (empty) media entity - the
+	 * second of two steps needed to give a product an image via the Admin API. Step one is
+	 * creating the media entity itself (e.g. via sync(), entity 'media', action 'upsert', with
+	 * your own deterministic id - see ShopwareProductSync::pushImages()); this call attaches the
+	 * actual file bytes to that id. Unlike every other method here, the request body is the raw
+	 * file content, not JSON.
+	 *
+	 * @param string $mediaId   Existing media entity id (32-char hex)
+	 * @param string $filePath  Absolute path to the file on disk
+	 * @param string $fileName  Target file name in Shopware, without extension
+	 * @param string $extension File extension without the dot, e.g. 'jpg'
+	 * @return bool
+	 */
+	public function uploadMediaFile($mediaId, $filePath, $fileName, $extension)
+	{
+		$token = $this->getAccessToken();
+		if ($token === false) {
+			return false;
+		}
+
+		if (!is_file($filePath)) {
+			$this->error = 'Media file not found: '.$filePath;
+			return false;
+		}
+
+		$mimeTypes = array(
+			'jpg' => 'image/jpeg',
+			'jpeg' => 'image/jpeg',
+			'png' => 'image/png',
+			'gif' => 'image/gif',
+			'webp' => 'image/webp',
+			'bmp' => 'image/bmp',
+		);
+		$mimeType = $mimeTypes[strtolower($extension)] ?? 'application/octet-stream';
+
+		$url = $this->baseUrl.$this->apiBase.'/_action/media/'.$mediaId.'/upload?'.http_build_query(array(
+			'extension' => $extension,
+			'fileName' => $fileName,
+		));
+
+		$ch = curl_init($url);
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+		curl_setopt($ch, CURLOPT_POST, true);
+		curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+		curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+			'Authorization: Bearer '.$token,
+			'Accept: application/json',
+			'Content-Type: '.$mimeType,
+		));
+		curl_setopt($ch, CURLOPT_POSTFIELDS, file_get_contents($filePath));
+
+		$response = curl_exec($ch);
+		$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+		$curlError = curl_error($ch);
+		curl_close($ch);
+
+		if ($response === false) {
+			$this->error = 'cURL error while uploading media file: '.$curlError;
+			return false;
+		}
+
+		if ($httpCode < 200 || $httpCode >= 300) {
+			$this->error = 'Shopware API error while uploading media file (HTTP '.$httpCode.'): '.$response;
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
 	 * Batch upsert/delete multiple entities of possibly different types in a single request,
 	 * via the Sync API (POST /api/_action/sync). This is the mechanism that solves auvopresta's
 	 * PHP-timeout problem (see PLAN.md): many products/variants/stock updates go out as one
