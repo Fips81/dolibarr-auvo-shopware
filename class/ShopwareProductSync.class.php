@@ -383,9 +383,11 @@ class ShopwareProductSync
 			if (!empty($combination->variation_price_percentage)) {
 				$priceImpact = ((float) $parent->price) * ($priceImpact / 100);
 			}
-			$childNet = (float) $parent->price + $priceImpact;
 			$vatRatio = ((float) $parent->price) > 0 ? ((float) $parent->price_ttc / (float) $parent->price) : 1.0;
-			$childGross = $childNet * $vatRatio;
+			// round(): plain float arithmetic here produces binary-rounding artifacts like
+			// 17.990000000000002 (found live) - Shopware stores/displays whatever we send.
+			$childNet = round((float) $parent->price + $priceImpact, 2);
+			$childGross = round($childNet * $vatRatio, 2);
 
 			// Each variant child is its own Dolibarr Product with its own ref-named image
 			// directory, so it gets the exact same upload treatment as the main product.
