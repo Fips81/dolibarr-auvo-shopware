@@ -31,6 +31,10 @@ AUVOSHOPWARE_SW_TAX_IDTooltip = UUID of the Shopware tax rate applied to all syn
 AUVOSHOPWARE_SW_SALES_CHANNEL_ID = Sales channel ID (Shopware)
 AUVOSHOPWARE_SW_SALES_CHANNEL_IDTooltip = UUID of the Shopware sales channel synchronized products must be visible/active in
 
+AuVoShopwareTestConnection = Test connection
+AuVoShopwareConnectionOk = Connection to the Shopware Admin API successful
+AuVoShopwareConnectionError = Connection to Shopware failed: %s
+
 #
 # About page
 #

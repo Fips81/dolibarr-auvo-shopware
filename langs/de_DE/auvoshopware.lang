@@ -31,6 +31,10 @@ AUVOSHOPWARE_SW_TAX_IDTooltip = UUID des Shopware-Steuersatzes, der auf alle syn
 AUVOSHOPWARE_SW_SALES_CHANNEL_ID = Verkaufskanal-ID (Shopware)
 AUVOSHOPWARE_SW_SALES_CHANNEL_IDTooltip = UUID des Shopware-Verkaufskanals, in dem synchronisierte Artikel sichtbar/aktiv sein müssen
 
+AuVoShopwareTestConnection = Verbindung testen
+AuVoShopwareConnectionOk = Verbindung zur Shopware Admin API erfolgreich
+AuVoShopwareConnectionError = Verbindung zu Shopware fehlgeschlagen: %s
+
 #
 # About page
 #

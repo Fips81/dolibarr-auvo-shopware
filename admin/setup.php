@@ -56,6 +56,7 @@ if (!$res) {
 // Libraries
 require_once DOL_DOCUMENT_ROOT."/core/lib/admin.lib.php";
 require_once '../lib/auvoshopware.lib.php';
+require_once '../class/ShopwareClient.class.php';
 
 /**
  * @var Conf $conf
@@ -136,6 +137,19 @@ $setupnotempty = count($formSetup->items);
 
 include DOL_DOCUMENT_ROOT.'/core/actions_setmoduleoptions.inc.php';
 
+if ($action == 'testconnection') {
+	$swClient = new ShopwareClient(
+		getDolGlobalString('AUVOSHOPWARE_SW_URL'),
+		getDolGlobalString('AUVOSHOPWARE_SW_CLIENT_ID'),
+		getDolGlobalString('AUVOSHOPWARE_SW_CLIENT_SECRET')
+	);
+	if ($swClient->testConnection()) {
+		setEventMessages($langs->trans('AuVoShopwareConnectionOk'), null, 'mesgs');
+	} else {
+		setEventMessages($langs->trans('AuVoShopwareConnectionError', $swClient->error), null, 'errors');
+	}
+}
+
 $action = 'edit';
 
 
@@ -165,6 +179,10 @@ if (!empty($formSetup->items)) {
 	print $formSetup->generateOutput(true);
 	print '<br>';
 }
+
+print '<div class="tabsAction">';
+print '<a class="butAction" href="'.$_SERVER["PHP_SELF"].'?action=testconnection&token='.newToken().'">'.$langs->trans("AuVoShopwareTestConnection").'</a>';
+print '</div>';
 
 if (empty($setupnotempty)) {
 	print '<br>'.$langs->trans("NothingToSetup");
