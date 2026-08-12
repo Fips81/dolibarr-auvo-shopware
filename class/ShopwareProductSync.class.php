@@ -18,6 +18,9 @@
 require_once DOL_DOCUMENT_ROOT.'/product/class/product.class.php';
 require_once DOL_DOCUMENT_ROOT.'/categories/class/categorie.class.php';
 require_once DOL_DOCUMENT_ROOT.'/variants/class/ProductCombination.class.php';
+require_once DOL_DOCUMENT_ROOT.'/variants/class/ProductAttribute.class.php';
+require_once DOL_DOCUMENT_ROOT.'/variants/class/ProductAttributeValue.class.php';
+require_once DOL_DOCUMENT_ROOT.'/variants/class/ProductCombination2ValuePair.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/lib/files.lib.php';
 
 /**
@@ -25,9 +28,8 @@ require_once DOL_DOCUMENT_ROOT.'/core/lib/files.lib.php';
  * \ingroup auvoshopware
  * \brief   Push Dolibarr products (scoped by category) to Shopware via the Sync API.
  *
- * First cut (PLAN.md phase 4, "start small"): plain products + images, no category mirroring,
- * no variants yet (those are follow-up steps once this shape is confirmed working live).
- * Category/tax/sales-channel/images assignment already happens here, variants do not.
+ * First cut (PLAN.md phase 4, "start small"): plain products + images + variants, no category
+ * mirroring yet (a follow-up step once this shape is confirmed working live).
  */
 class ShopwareProductSync
 {
@@ -247,6 +249,174 @@ class ShopwareProductSync
 	}
 
 	/**
+	 * Deterministic id for a Shopware property_group (e.g. "Farbe"), keyed by the Dolibarr
+	 * attribute id. Unlike PrestaShop's serial attribute-group ids (which auvopresta had to look
+	 * up and cache in a mapping table), Shopware lets us pick our own id, so no mapping table is
+	 * needed here - same reasoning as productUuid().
+	 *
+	 * @param int $fkAttribute
+	 * @return string
+	 */
+	protected function propertyGroupUuid($fkAttribute)
+	{
+		return md5('auvoshopware-property-group-'.$fkAttribute);
+	}
+
+	/**
+	 * Deterministic id for a Shopware property_group_option (e.g. "Rot"), keyed by the Dolibarr
+	 * attribute value id.
+	 *
+	 * @param int $fkAttributeValue
+	 * @return string
+	 */
+	protected function propertyGroupOptionUuid($fkAttributeValue)
+	{
+		return md5('auvoshopware-property-group-option-'.$fkAttributeValue);
+	}
+
+	/**
+	 * Deterministic id for one entry of a parent product's product_configurator_setting
+	 * association (which options define this product's variant axes). Same "nested to-many
+	 * association needs its own stable id too" rule as visibilityUuid()/productMediaUuid().
+	 *
+	 * @param string $parentRef
+	 * @param int    $fkAttributeValue
+	 * @return string
+	 */
+	protected function configuratorSettingUuid($parentRef, $fkAttributeValue)
+	{
+		return md5('auvoshopware-configurator-setting-'.$parentRef.'-'.$fkAttributeValue);
+	}
+
+	/**
+	 * Dolibarr combinations (color/size/... variants) of a product, if it's a variant parent.
+	 *
+	 * @param Product $product
+	 * @return ProductCombination[]
+	 */
+	protected function getParentCombinations(Product $product)
+	{
+		$combination = new ProductCombination($this->db);
+		$rows = $combination->fetchAllByFkProductParent($product->id);
+
+		return is_array($rows) ? $rows : array();
+	}
+
+	/**
+	 * Mirror a variant parent's Dolibarr combinations (color/size/...) into Shopware: a
+	 * property_group + property_group_option for each used attribute/value, a
+	 * product_configurator_setting entry per used option on the parent, and each combination's
+	 * child product as its own Shopware "product" entity (parentId pointing at the parent,
+	 * "options" pointing at its specific value combination). No-op if the product has no
+	 * combinations.
+	 *
+	 * The child's price is derived from the combination's price impact (variation_price /
+	 * variation_price_percentage) applied to the parent's price, not read from the child
+	 * product's own ->price - mirrors auvopresta's PrestaShopProductSync::pushVariants(), which
+	 * found Dolibarr doesn't reliably keep the child's own price field in sync with the impact.
+	 * The gross/net ratio of the parent's own price is reused to derive the child's gross price
+	 * from its net price (assumes a flat VAT rate, same assumption already made for the parent).
+	 *
+	 * @param Product $parent
+	 * @return array{propertyGroups: array<int, array<string, mixed>>, propertyGroupOptions: array<int, array<string, mixed>>, variantProducts: array<int, array<string, mixed>>, configuratorSettings: array<int, array<string, mixed>>, error: ?string}
+	 */
+	protected function pushVariants(Product $parent)
+	{
+		$empty = array('propertyGroups' => array(), 'propertyGroupOptions' => array(), 'variantProducts' => array(), 'configuratorSettings' => array(), 'error' => null);
+
+		$combinations = $this->getParentCombinations($parent);
+		if (empty($combinations)) {
+			return $empty;
+		}
+
+		$propertyGroups = array();
+		$propertyGroupOptions = array();
+		$configuratorSettings = array();
+		$variantProducts = array();
+		$errors = array();
+
+		foreach ($combinations as $combination) {
+			$pairs = new ProductCombination2ValuePair($this->db);
+			$valuePairs = $pairs->fetchByFkCombination($combination->id);
+			if (!is_array($valuePairs)) {
+				$valuePairs = array();
+			}
+
+			$child = new Product($this->db);
+			if ($child->fetch($combination->fk_product_child) <= 0) {
+				$errors[] = 'Combination '.$combination->id.': child product '.$combination->fk_product_child.' not found';
+				continue;
+			}
+
+			$optionIds = array();
+			$pairError = null;
+			foreach ($valuePairs as $pair) {
+				$attribute = new ProductAttribute($this->db);
+				if ($attribute->fetch($pair->fk_prod_attr) <= 0) {
+					$pairError = 'Dolibarr attribute not found: '.$pair->fk_prod_attr;
+					break;
+				}
+				$attributeValue = new ProductAttributeValue($this->db);
+				if ($attributeValue->fetch($pair->fk_prod_attr_val) <= 0) {
+					$pairError = 'Dolibarr attribute value not found: '.$pair->fk_prod_attr_val;
+					break;
+				}
+
+				$groupId = $this->propertyGroupUuid($pair->fk_prod_attr);
+				$optionId = $this->propertyGroupOptionUuid($pair->fk_prod_attr_val);
+
+				$propertyGroups[$groupId] = array('id' => $groupId, 'name' => $attribute->label);
+				$propertyGroupOptions[$optionId] = array('id' => $optionId, 'groupId' => $groupId, 'name' => $attributeValue->value);
+				$configuratorSettings[$optionId] = array(
+					'id' => $this->configuratorSettingUuid($parent->ref, $pair->fk_prod_attr_val),
+					'optionId' => $optionId,
+				);
+
+				$optionIds[] = $optionId;
+			}
+			if ($pairError !== null) {
+				$errors[] = 'Combination '.$combination->id.': '.$pairError;
+				continue;
+			}
+
+			$priceImpact = (float) $combination->variation_price;
+			if (!empty($combination->variation_price_percentage)) {
+				$priceImpact = ((float) $parent->price) * ($priceImpact / 100);
+			}
+			$childNet = (float) $parent->price + $priceImpact;
+			$vatRatio = ((float) $parent->price) > 0 ? ((float) $parent->price_ttc / (float) $parent->price) : 1.0;
+			$childGross = $childNet * $vatRatio;
+
+			$variantProducts[] = array(
+				'id' => $this->productUuid($child->ref),
+				'productNumber' => $child->ref,
+				'parentId' => $this->productUuid($parent->ref),
+				'stock' => (int) $child->stock_reel,
+				'taxId' => getDolGlobalString('AUVOSHOPWARE_SW_TAX_ID'),
+				'price' => array(
+					array(
+						'currencyId' => self::DEFAULT_CURRENCY_ID,
+						'gross' => $childGross,
+						'net' => $childNet,
+						'linked' => false,
+					),
+				),
+				'options' => array_map(function ($id) {
+					return array('id' => $id);
+				}, $optionIds),
+			);
+		}
+
+		return array(
+			'propertyGroups' => array_values($propertyGroups),
+			'propertyGroupOptions' => array_values($propertyGroupOptions),
+			'variantProducts' => $variantProducts,
+			'configuratorSettings' => array_values($configuratorSettings),
+			'error' => empty($errors) ? null : implode('; ', $errors),
+		);
+	}
+
+	/**
 	 * Cheapest currently known supplier purchase price for this product (net unit price, after
 	 * any line discount), same value Dolibarr itself calls "Bester Einkaufspreis" on
 	 * product/price_suppliers.php. Uses Dolibarr core ProductFournisseur::find_min_price_product_fournisseur(),
@@ -463,6 +633,17 @@ class ShopwareProductSync
 			sort($imageSignature);
 		}
 
+		$variantSignature = array();
+		foreach ($this->getParentCombinations($product) as $combination) {
+			$child = new Product($this->db);
+			if ($child->fetch($combination->fk_product_child) > 0) {
+				$variantSignature[] = $child->ref.':'.$combination->variation_price.':'
+					.($combination->variation_price_percentage ? '1' : '0').':'
+					.$combination->variation_weight.':'.$child->stock_reel;
+			}
+		}
+		sort($variantSignature);
+
 		$data = implode('|', array(
 			$product->ref,
 			$product->label,
@@ -476,6 +657,7 @@ class ShopwareProductSync
 			implode(',', $imageSignature),
 			(string) $this->getManufacturerName($product),
 			(string) $this->getSupplierBuyPrice($product),
+			implode(',', $variantSignature),
 		));
 
 		return md5($data);
@@ -520,13 +702,38 @@ class ShopwareProductSync
 			}
 		}
 
-		$result = $this->client->sync(array(
-			'upsert-product' => array(
-				'entity' => 'product',
+		$variantResult = $this->pushVariants($product);
+
+		$parentPayload = $this->buildProductPayload($product, $mediaResult, $manufacturerId);
+		if (!empty($variantResult['configuratorSettings'])) {
+			$parentPayload['configuratorSettings'] = $variantResult['configuratorSettings'];
+		}
+
+		// Property groups/options must be upserted before the product(s) that reference them as
+		// foreign keys - the Sync API processes operations of one request in the given order, so
+		// all three go out together as a single request rather than one call per step.
+		$operations = array();
+		if (!empty($variantResult['propertyGroups'])) {
+			$operations['upsert-property-groups'] = array(
+				'entity' => 'property_group',
 				'action' => 'upsert',
-				'payload' => array($this->buildProductPayload($product, $mediaResult, $manufacturerId)),
-			),
-		));
+				'payload' => $variantResult['propertyGroups'],
+			);
+		}
+		if (!empty($variantResult['propertyGroupOptions'])) {
+			$operations['upsert-property-group-options'] = array(
+				'entity' => 'property_group_option',
+				'action' => 'upsert',
+				'payload' => $variantResult['propertyGroupOptions'],
+			);
+		}
+		$operations['upsert-product'] = array(
+			'entity' => 'product',
+			'action' => 'upsert',
+			'payload' => array_merge(array($parentPayload), $variantResult['variantProducts']),
+		);
+
+		$result = $this->client->sync($operations);
 
 		if ($result === false) {
 			$this->saveMapRow($product->id, $swProductId, 'error', $this->client->error);
@@ -536,6 +743,11 @@ class ShopwareProductSync
 		if (!empty($mediaResult['error'])) {
 			$this->saveMapRow($product->id, $swProductId, 'error', 'Images: '.$mediaResult['error'], $contentHash);
 			return array('status' => 'error', 'sw_product_id' => $swProductId, 'error' => 'Images: '.$mediaResult['error']);
+		}
+
+		if (!empty($variantResult['error'])) {
+			$this->saveMapRow($product->id, $swProductId, 'error', 'Variants: '.$variantResult['error'], $contentHash);
+			return array('status' => 'error', 'sw_product_id' => $swProductId, 'error' => 'Variants: '.$variantResult['error']);
 		}
 
 		$this->saveMapRow($product->id, $swProductId, 'ok', null, $contentHash);
