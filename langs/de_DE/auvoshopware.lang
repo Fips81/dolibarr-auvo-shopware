@@ -1,0 +1,49 @@
+# Translation file
+
+#
+# Generic
+#
+
+# Module label 'ModuleAuVoShopwareName'
+ModuleAuVoShopwareName = AuVoShopware
+# Module description 'ModuleAuVoShopwareDesc'
+ModuleAuVoShopwareDesc = Artikel und Bestellungen mit einem Shopware-6-Shop synchronisieren
+
+#
+# Admin page
+#
+AuVoShopwareSetup = AuVoShopware Einrichtung
+Settings = Einstellungen
+AuVoShopwareSetupPage = Verbindung zu deinem Shopware-Shop und den Umfang der zu synchronisierenden Artikel konfigurieren.
+AuVoShopwareSyncScope = Sync-Umfang
+
+AUVOSHOPWARE_SW_URL = URL des Shopware-Shops
+AUVOSHOPWARE_SW_CLIENT_ID = API Client-ID
+AUVOSHOPWARE_SW_CLIENT_IDTooltip = Client-ID einer Integration, angelegt in Shopware unter Einstellungen > System > Integrationen
+AUVOSHOPWARE_SW_CLIENT_SECRET = API Client-Secret
+AUVOSHOPWARE_SW_CLIENT_SECRETTooltip = Client-Secret der in Shopware angelegten Integration
+AUVOSHOPWARE_CATEGORY_ID = Quellkategorie (Dolibarr)
+AUVOSHOPWARE_CATEGORY_IDTooltip = Nur Artikel in dieser Kategorie und ihren Unterkategorien werden nach Shopware synchronisiert
+AUVOSHOPWARE_SW_PARENT_CATEGORY_ID = Eltern-Kategorie-ID (Shopware)
+AUVOSHOPWARE_SW_PARENT_CATEGORY_IDTooltip = UUID der Shopware-Kategorie, unter der die gespiegelte Kategorie-Struktur angelegt wird
+AUVOSHOPWARE_SW_TAX_ID = Steuersatz-ID (Shopware)
+AUVOSHOPWARE_SW_TAX_IDTooltip = UUID des Shopware-Steuersatzes, der auf alle synchronisierten Artikel angewendet wird
+AUVOSHOPWARE_SW_SALES_CHANNEL_ID = Verkaufskanal-ID (Shopware)
+AUVOSHOPWARE_SW_SALES_CHANNEL_IDTooltip = UUID des Shopware-Verkaufskanals, in dem synchronisierte Artikel sichtbar/aktiv sein müssen
+
+#
+# About page
+#
+About = Über
+AuVoShopwareAbout = Über AuVoShopware
+AuVoShopwareAboutPage = AuVoShopware Info-Seite
+
+#
+# Dashboard / sync page
+#
+AuVoShopwareArea = Shopware-Sync
+AuVoShopwareNotConfigured = Die Shopware-Verbindung ist noch nicht vollständig eingerichtet. Bitte zuerst die <a href="%s">Moduleinrichtung</a> abschließen.
+AuVoShopwareConnectionSummary = Verbindungsübersicht
+AuVoShopwareSyncNotImplementedYet = Verbindung ist eingerichtet. Artikel- und Bestell-Synchronisation erscheinen hier, sobald die Shopware-Sync-Klassen implementiert sind (siehe PLAN.md).
+AuVoShopwareSyncCronLabel = Mit Shopware synchronisieren
+AuVoShopwareSyncCronComment = Führt den AuVoShopware-Artikel- und Bestell-Sync aus. Standardmäßig deaktiviert, bis die Sync-Klassen implementiert sind.

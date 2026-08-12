@@ -1,0 +1,49 @@
+# Translation file
+
+#
+# Generic
+#
+
+# Module label 'ModuleAuVoShopwareName'
+ModuleAuVoShopwareName = AuVoShopware
+# Module description 'ModuleAuVoShopwareDesc'
+ModuleAuVoShopwareDesc = Synchronize products and orders with a Shopware 6 shop
+
+#
+# Admin page
+#
+AuVoShopwareSetup = AuVoShopware setup
+Settings = Settings
+AuVoShopwareSetupPage = Configure the connection to your Shopware shop and the scope of products to synchronize.
+AuVoShopwareSyncScope = Synchronization scope
+
+AUVOSHOPWARE_SW_URL = Shopware shop URL
+AUVOSHOPWARE_SW_CLIENT_ID = API client ID
+AUVOSHOPWARE_SW_CLIENT_IDTooltip = Client ID of an Integration created in Shopware under Settings > System > Integrations
+AUVOSHOPWARE_SW_CLIENT_SECRET = API client secret
+AUVOSHOPWARE_SW_CLIENT_SECRETTooltip = Client secret of the Integration created in Shopware
+AUVOSHOPWARE_CATEGORY_ID = Source category (Dolibarr)
+AUVOSHOPWARE_CATEGORY_IDTooltip = Only products in this category and its subcategories will be synchronized to Shopware
+AUVOSHOPWARE_SW_PARENT_CATEGORY_ID = Parent category ID (Shopware)
+AUVOSHOPWARE_SW_PARENT_CATEGORY_IDTooltip = UUID of the Shopware category the mirrored category tree is created under
+AUVOSHOPWARE_SW_TAX_ID = Tax rate ID (Shopware)
+AUVOSHOPWARE_SW_TAX_IDTooltip = UUID of the Shopware tax rate applied to all synchronized products
+AUVOSHOPWARE_SW_SALES_CHANNEL_ID = Sales channel ID (Shopware)
+AUVOSHOPWARE_SW_SALES_CHANNEL_IDTooltip = UUID of the Shopware sales channel synchronized products must be visible/active in
+
+#
+# About page
+#
+About = About
+AuVoShopwareAbout = About AuVoShopware
+AuVoShopwareAboutPage = AuVoShopware about page
+
+#
+# Dashboard / sync page
+#
+AuVoShopwareArea = Shopware sync
+AuVoShopwareNotConfigured = The Shopware connection is not fully configured yet. Please complete the <a href="%s">module setup</a> first.
+AuVoShopwareConnectionSummary = Connection summary
+AuVoShopwareSyncNotImplementedYet = Connection is configured. Product and order synchronization will appear here once the Shopware sync classes are implemented (see PLAN.md).
+AuVoShopwareSyncCronLabel = Sync with Shopware
+AuVoShopwareSyncCronComment = Runs AuVoShopware's product and order sync. Disabled by default until the sync classes are implemented.
