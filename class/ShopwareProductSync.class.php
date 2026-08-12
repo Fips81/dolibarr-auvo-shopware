@@ -164,6 +164,7 @@ class ShopwareProductSync
 			'id' => $this->productUuid($product->ref),
 			'productNumber' => $product->ref,
 			'name' => $product->label,
+			'description' => (string) $product->description,
 			'stock' => (int) $product->stock_reel,
 			'taxId' => getDolGlobalString('AUVOSHOPWARE_SW_TAX_ID'),
 			'price' => array(
@@ -202,6 +203,7 @@ class ShopwareProductSync
 		$data = implode('|', array(
 			$product->ref,
 			$product->label,
+			(string) $product->description,
 			(string) $product->price,
 			(string) $product->price_ttc,
 			(string) getDolGlobalString('AUVOSHOPWARE_SW_TAX_ID'),
