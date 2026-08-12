@@ -247,12 +247,13 @@ class ShopwareProductSync
 	}
 
 	/**
-	 * Cheapest currently known supplier purchase price for this product (Dolibarr core
-	 * ProductFournisseur::find_min_price_product_fournisseur()), or null if none is on file or
-	 * the lookup isn't available. Guarded with class_exists()/method_exists() since this Dolibarr
-	 * internal hasn't been verified against this shop's exact Dolibarr version - see PLAN.md on
-	 * verifying Dolibarr internals rather than assuming from memory; a wrong guess here should
-	 * degrade to "no purchase price sent" rather than break the sync.
+	 * Cheapest currently known supplier purchase price for this product (net unit price, after
+	 * any line discount), same value Dolibarr itself calls "Bester Einkaufspreis" on
+	 * product/price_suppliers.php. Uses Dolibarr core ProductFournisseur::find_min_price_product_fournisseur(),
+	 * verified against this shop's actual source (fourn/class/fournisseur.product.class.php):
+	 * returns the matching product_fourn_price_id (>0) on success, 0 if no supplier price is on
+	 * file, -1 on a SQL error; the price itself ends up in $this->fourn_unitprice_with_discount,
+	 * not a "fourn_pu" property (that name doesn't exist on this class).
 	 *
 	 * @param Product $product
 	 * @return float|null
@@ -275,11 +276,11 @@ class ShopwareProductSync
 		}
 
 		$result = $productFourn->find_min_price_product_fournisseur($product->id);
-		if ($result < 0 || empty($productFourn->fourn_pu)) {
+		if ($result <= 0) {
 			return null;
 		}
 
-		return (float) $productFourn->fourn_pu;
+		return (float) $productFourn->fourn_unitprice_with_discount;
 	}
 
 	/**
