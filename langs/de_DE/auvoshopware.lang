@@ -35,6 +35,12 @@ AuVoShopwareTestConnection = Verbindung testen
 AuVoShopwareConnectionOk = Verbindung zur Shopware Admin API erfolgreich
 AuVoShopwareConnectionError = Verbindung zu Shopware fehlgeschlagen: %s
 
+AuVoShopwareReferenceValues = Shopware-Referenzwerte
+AuVoShopwareReferenceValuesDesc = Shopware zeigt diese IDs in der eigenen Oberfläche nicht immer im Klartext an. Die passende ID für Steuersatz/Verkaufskanal hier kopieren und oben eintragen.
+AuVoShopwareReferenceValuesError = Konnte nicht geladen werden: %s
+AuVoShopwareTaxRates = Steuersätze
+AuVoShopwareSalesChannels = Verkaufskanäle
+
 #
 # About page
 #

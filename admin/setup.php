@@ -184,6 +184,45 @@ print '<div class="tabsAction">';
 print '<a class="butAction" href="'.$_SERVER["PHP_SELF"].'?action=testconnection&token='.newToken().'">'.$langs->trans("AuVoShopwareTestConnection").'</a>';
 print '</div>';
 
+// Reference lookup: AUVOSHOPWARE_SW_TAX_ID / AUVOSHOPWARE_SW_SALES_CHANNEL_ID need a Shopware
+// UUID that isn't always shown as plain text in the Shopware admin UI. Listing name+id here
+// (only once URL+credentials are filled in) saves a manual hunt through the shop's admin.
+if (getDolGlobalString('AUVOSHOPWARE_SW_URL') && getDolGlobalString('AUVOSHOPWARE_SW_CLIENT_ID') && getDolGlobalString('AUVOSHOPWARE_SW_CLIENT_SECRET')) {
+	$swClientForRef = new ShopwareClient(
+		getDolGlobalString('AUVOSHOPWARE_SW_URL'),
+		getDolGlobalString('AUVOSHOPWARE_SW_CLIENT_ID'),
+		getDolGlobalString('AUVOSHOPWARE_SW_CLIENT_SECRET')
+	);
+
+	print load_fiche_titre($langs->trans('AuVoShopwareReferenceValues'), '', '');
+	print '<span class="opacitymedium">'.$langs->trans('AuVoShopwareReferenceValuesDesc').'</span><br><br>';
+
+	print '<div class="fichecenter"><div class="fichehalfleft">';
+	print '<table class="noborder centpercent">';
+	print '<tr class="liste_titre"><th colspan="2">'.$langs->trans('AuVoShopwareTaxRates').'</th></tr>';
+	$taxes = $swClientForRef->listNamedEntities('tax');
+	if (empty($taxes)) {
+		print '<tr class="oddeven"><td colspan="2" class="opacitymedium">'.$langs->trans('AuVoShopwareReferenceValuesError', $swClientForRef->error).'</td></tr>';
+	}
+	foreach ($taxes as $tax) {
+		print '<tr class="oddeven"><td>'.dol_escape_htmltag($tax['name']).'</td><td><code>'.dol_escape_htmltag($tax['id']).'</code></td></tr>';
+	}
+	print '</table>';
+	print '</div><div class="fichehalfright">';
+	print '<table class="noborder centpercent">';
+	print '<tr class="liste_titre"><th colspan="2">'.$langs->trans('AuVoShopwareSalesChannels').'</th></tr>';
+	$salesChannels = $swClientForRef->listNamedEntities('sales-channel');
+	if (empty($salesChannels)) {
+		print '<tr class="oddeven"><td colspan="2" class="opacitymedium">'.$langs->trans('AuVoShopwareReferenceValuesError', $swClientForRef->error).'</td></tr>';
+	}
+	foreach ($salesChannels as $salesChannel) {
+		print '<tr class="oddeven"><td>'.dol_escape_htmltag($salesChannel['name']).'</td><td><code>'.dol_escape_htmltag($salesChannel['id']).'</code></td></tr>';
+	}
+	print '</table>';
+	print '</div></div>';
+	print '<br>';
+}
+
 if (empty($setupnotempty)) {
 	print '<br>'.$langs->trans("NothingToSetup");
 }

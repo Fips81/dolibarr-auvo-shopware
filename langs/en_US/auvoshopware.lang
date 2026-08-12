@@ -35,6 +35,12 @@ AuVoShopwareTestConnection = Test connection
 AuVoShopwareConnectionOk = Connection to the Shopware Admin API successful
 AuVoShopwareConnectionError = Connection to Shopware failed: %s
 
+AuVoShopwareReferenceValues = Shopware reference values
+AuVoShopwareReferenceValuesDesc = Shopware does not always show these IDs as plain text in its own admin. Copy the ID matching the tax rate / sales channel you want here into the fields above.
+AuVoShopwareReferenceValuesError = Could not load: %s
+AuVoShopwareTaxRates = Tax rates
+AuVoShopwareSalesChannels = Sales channels
+
 #
 # About page
 #

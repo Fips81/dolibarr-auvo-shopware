@@ -221,6 +221,31 @@ class ShopwareClient
 	}
 
 	/**
+	 * List of {id, name} for a simple entity, used to help admins fill in setup fields (like
+	 * AUVOSHOPWARE_SW_TAX_ID / AUVOSHOPWARE_SW_SALES_CHANNEL_ID) that need a Shopware UUID -
+	 * these aren't always visible as plain text in the Shopware admin UI itself.
+	 *
+	 * @param string $entity Route name, e.g. 'tax' or 'sales-channel'
+	 * @return array<int, array{id: string, name: string}> Empty array on error (see $this->error)
+	 */
+	public function listNamedEntities($entity)
+	{
+		$result = $this->request('GET', $entity, null, array('limit' => 100));
+		if (!is_array($result) || empty($result['data']) || !is_array($result['data'])) {
+			return array();
+		}
+
+		$rows = array();
+		foreach ($result['data'] as $row) {
+			if (isset($row['id'])) {
+				$rows[] = array('id' => $row['id'], 'name' => $row['name'] ?? '');
+			}
+		}
+
+		return $rows;
+	}
+
+	/**
 	 * Batch upsert/delete multiple entities of possibly different types in a single request,
 	 * via the Sync API (POST /api/_action/sync). This is the mechanism that solves auvopresta's
 	 * PHP-timeout problem (see PLAN.md): many products/variants/stock updates go out as one
