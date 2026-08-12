@@ -150,6 +150,22 @@ class ShopwareProductSync
 	}
 
 	/**
+	 * Deterministic id for the product's product_visibility row (product+sales channel). Nested
+	 * to-many associations in a Sync API upsert need their own stable id too, same as the
+	 * product itself - otherwise Shopware inserts a new row every sync instead of updating the
+	 * existing one, and the second sync onwards hits product_visibility's
+	 * (product_id, sales_channel_id) unique constraint (found live: HTTP 500, error code 1062).
+	 *
+	 * @param string $ref
+	 * @param string $salesChannelId
+	 * @return string
+	 */
+	protected function visibilityUuid($ref, $salesChannelId)
+	{
+		return md5('auvoshopware-visibility-'.$ref.'-'.$salesChannelId);
+	}
+
+	/**
 	 * Build the Sync API payload for one product. Minimal required fields for
 	 * Product.upsert: id, productNumber, name, stock, taxId, price. "visibilities" makes the
 	 * product visible/purchasable in the configured sales channel (AUVOSHOPWARE_SW_SALES_CHANNEL_ID) -
@@ -182,6 +198,7 @@ class ShopwareProductSync
 		if (!empty($salesChannelId)) {
 			$payload['visibilities'] = array(
 				array(
+					'id' => $this->visibilityUuid($product->ref, $salesChannelId),
 					'salesChannelId' => $salesChannelId,
 					'visibility' => 30, // Shopware ProductVisibilityDefinition::VISIBILITY_ALL
 				),
