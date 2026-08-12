@@ -555,8 +555,11 @@ class ShopwareProductSync
 			}
 
 			$extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-			$fileNameNoExt = pathinfo($filename, PATHINFO_FILENAME);
-			if ($this->client->uploadMediaFile($mediaId, $productDir.'/'.$filename, $fileNameNoExt, $extension)) {
+			// Shopware's media file name is unique across the whole media library, not just per
+			// product - prefixing with the ref avoids CONTENT__MEDIA_DUPLICATED_FILE_NAME when
+			// the same image file name is reused across different products/variants (found live).
+			$swFileName = dol_sanitizeFileName($product->ref).'_'.pathinfo($filename, PATHINFO_FILENAME);
+			if ($this->client->uploadMediaFile($mediaId, $productDir.'/'.$filename, $swFileName, $extension)) {
 				$existingImages[$filename] = $mediaId;
 			} else {
 				$errors[] = $filename.': '.$this->client->error;
