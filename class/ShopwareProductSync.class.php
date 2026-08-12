@@ -387,7 +387,15 @@ class ShopwareProductSync
 			$vatRatio = ((float) $parent->price) > 0 ? ((float) $parent->price_ttc / (float) $parent->price) : 1.0;
 			$childGross = $childNet * $vatRatio;
 
-			$variantProducts[] = array(
+			// Each variant child is its own Dolibarr Product with its own ref-named image
+			// directory, so it gets the exact same upload treatment as the main product.
+			$childMediaResult = $this->pushImages($child);
+			$this->saveMapImages($child->id, $childMediaResult['images']);
+			if (!empty($childMediaResult['error'])) {
+				$errors[] = 'Combination '.$combination->id.' images: '.$childMediaResult['error'];
+			}
+
+			$variantPayload = array(
 				'id' => $this->productUuid($child->ref),
 				'productNumber' => $child->ref,
 				'parentId' => $this->productUuid($parent->ref),
@@ -405,6 +413,15 @@ class ShopwareProductSync
 					return array('id' => $id);
 				}, $optionIds),
 			);
+
+			if (!empty($childMediaResult['associations'])) {
+				$variantPayload['media'] = $childMediaResult['associations'];
+				if (!empty($childMediaResult['coverId'])) {
+					$variantPayload['coverId'] = $childMediaResult['coverId'];
+				}
+			}
+
+			$variantProducts[] = $variantPayload;
 		}
 
 		return array(
@@ -454,8 +471,41 @@ class ShopwareProductSync
 	}
 
 	/**
+	 * Absolute path to a Dolibarr product's document directory (same for the main product and
+	 * any variant child - each has its own ref-named directory).
+	 *
+	 * @param Product $product
+	 * @return string
+	 */
+	protected function getProductDir(Product $product)
+	{
+		global $conf;
+
+		$entity = $product->entity ?: $conf->entity;
+
+		return $conf->product->multidir_output[$entity].'/'.dol_sanitizeFileName($product->ref);
+	}
+
+	/**
+	 * Image files (jpg/jpeg/png/gif/webp/bmp) in a product's document directory, or an empty
+	 * array if there are none. Shared by pushImages() (parent and, since variant images, each
+	 * variant child too) and computeContentHash().
+	 *
+	 * @param Product $product
+	 * @return array<int, array<string, mixed>>
+	 */
+	protected function getProductImageFiles(Product $product)
+	{
+		$files = dol_dir_list($this->getProductDir($product), 'files', 0, '\.(jpg|jpeg|png|gif|webp|bmp)$');
+
+		return is_array($files) ? $files : array();
+	}
+
+	/**
 	 * Upload any product image files not yet known to Shopware (per the local sw_images map),
 	 * and return the "media" association list + cover id to merge into the product payload.
+	 * Works the same for the main product and for a variant child - each is just a Dolibarr
+	 * Product with its own ref-named image directory and its own row in the mapping table.
 	 *
 	 * Two Admin API calls per new image, both outside the main product Sync API call: (1)
 	 * sync()-upsert an empty 'media' entity with a deterministic id, (2) upload the raw file
@@ -467,13 +517,9 @@ class ShopwareProductSync
 	 */
 	protected function pushImages(Product $product)
 	{
-		global $conf;
-
-		$entity = $product->entity ?: $conf->entity;
-		$productDir = $conf->product->multidir_output[$entity].'/'.dol_sanitizeFileName($product->ref);
-
-		$files = dol_dir_list($productDir, 'files', 0, '\.(jpg|jpeg|png|gif|webp|bmp)$');
-		if (empty($files) || !is_array($files)) {
+		$productDir = $this->getProductDir($product);
+		$files = $this->getProductImageFiles($product);
+		if (empty($files)) {
 			return array('associations' => array(), 'coverId' => null, 'images' => array(), 'error' => null);
 		}
 		sort($files);
@@ -619,27 +665,26 @@ class ShopwareProductSync
 	 */
 	protected function computeContentHash(Product $product)
 	{
-		global $conf;
-
-		$entity = $product->entity ?: $conf->entity;
-		$productDir = $conf->product->multidir_output[$entity].'/'.dol_sanitizeFileName($product->ref);
-
-		$files = dol_dir_list($productDir, 'files', 0, '\.(jpg|jpeg|png|gif|webp|bmp)$');
 		$imageSignature = array();
-		if (is_array($files)) {
-			foreach ($files as $file) {
-				$imageSignature[] = ($file['name'] ?? '').':'.($file['size'] ?? 0);
-			}
-			sort($imageSignature);
+		foreach ($this->getProductImageFiles($product) as $file) {
+			$imageSignature[] = ($file['name'] ?? '').':'.($file['size'] ?? 0);
 		}
+		sort($imageSignature);
 
 		$variantSignature = array();
 		foreach ($this->getParentCombinations($product) as $combination) {
 			$child = new Product($this->db);
 			if ($child->fetch($combination->fk_product_child) > 0) {
+				$childImageSignature = array();
+				foreach ($this->getProductImageFiles($child) as $file) {
+					$childImageSignature[] = ($file['name'] ?? '').':'.($file['size'] ?? 0);
+				}
+				sort($childImageSignature);
+
 				$variantSignature[] = $child->ref.':'.$combination->variation_price.':'
 					.($combination->variation_price_percentage ? '1' : '0').':'
-					.$combination->variation_weight.':'.$child->stock_reel;
+					.$combination->variation_weight.':'.$child->stock_reel.':'
+					.implode(',', $childImageSignature);
 			}
 		}
 		sort($variantSignature);
