@@ -191,6 +191,98 @@ class ShopwareProductSync
 	}
 
 	/**
+	 * Deterministic id for a Shopware product_manufacturer entity, keyed by name (manufacturers
+	 * aren't Dolibarr objects with their own id here, just a free-text extrafield value - see
+	 * getManufacturerName()).
+	 *
+	 * @param string $name
+	 * @return string
+	 */
+	protected function manufacturerUuid($name)
+	{
+		return md5('auvoshopware-manufacturer-'.$name);
+	}
+
+	/**
+	 * Manufacturer name from the product's "hersteller" extrafield, or null if empty/not set.
+	 *
+	 * @param Product $product
+	 * @return string|null
+	 */
+	protected function getManufacturerName(Product $product)
+	{
+		if (!is_array($product->array_options) || $product->array_options === array()) {
+			$product->fetch_optionals();
+		}
+
+		$name = trim((string) ($product->array_options['options_hersteller'] ?? ''));
+
+		return $name !== '' ? $name : null;
+	}
+
+	/**
+	 * Ensure a Shopware product_manufacturer entity exists for the given name, and return its id.
+	 *
+	 * @param string $name
+	 * @return string|false Manufacturer id, or false on error (see $this->error)
+	 */
+	protected function ensureManufacturer($name)
+	{
+		$manufacturerId = $this->manufacturerUuid($name);
+
+		$result = $this->client->sync(array(
+			'upsert-manufacturer' => array(
+				'entity' => 'product_manufacturer',
+				'action' => 'upsert',
+				'payload' => array(array('id' => $manufacturerId, 'name' => $name)),
+			),
+		));
+
+		if ($result === false) {
+			$this->error = $this->client->error;
+			return false;
+		}
+
+		return $manufacturerId;
+	}
+
+	/**
+	 * Cheapest currently known supplier purchase price for this product (Dolibarr core
+	 * ProductFournisseur::find_min_price_product_fournisseur()), or null if none is on file or
+	 * the lookup isn't available. Guarded with class_exists()/method_exists() since this Dolibarr
+	 * internal hasn't been verified against this shop's exact Dolibarr version - see PLAN.md on
+	 * verifying Dolibarr internals rather than assuming from memory; a wrong guess here should
+	 * degrade to "no purchase price sent" rather than break the sync.
+	 *
+	 * @param Product $product
+	 * @return float|null
+	 */
+	protected function getSupplierBuyPrice(Product $product)
+	{
+		$file = DOL_DOCUMENT_ROOT.'/fourn/class/fournisseur.product.class.php';
+		if (!file_exists($file)) {
+			return null;
+		}
+		require_once $file;
+
+		if (!class_exists('ProductFournisseur')) {
+			return null;
+		}
+
+		$productFourn = new ProductFournisseur($this->db);
+		if (!method_exists($productFourn, 'find_min_price_product_fournisseur')) {
+			return null;
+		}
+
+		$result = $productFourn->find_min_price_product_fournisseur($product->id);
+		if ($result < 0 || empty($productFourn->fourn_pu)) {
+			return null;
+		}
+
+		return (float) $productFourn->fourn_pu;
+	}
+
+	/**
 	 * Upload any product image files not yet known to Shopware (per the local sw_images map),
 	 * and return the "media" association list + cover id to merge into the product payload.
 	 *
@@ -285,11 +377,12 @@ class ShopwareProductSync
 	 * without it, a product exists in Shopware but never shows up in the shop. "media"/"coverId"
 	 * come from pushImages() (already-uploaded images only).
 	 *
-	 * @param Product $product
+	 * @param Product     $product
 	 * @param array{associations: array<int, array{id: string, mediaId: string, position: int}>, coverId: ?string} $mediaResult
+	 * @param string|null $manufacturerId Already-resolved Shopware product_manufacturer id (see ensureManufacturer())
 	 * @return array<string, mixed>
 	 */
-	public function buildProductPayload(Product $product, array $mediaResult = array())
+	public function buildProductPayload(Product $product, array $mediaResult = array(), $manufacturerId = null)
 	{
 		$payload = array(
 			'id' => $this->productUuid($product->ref),
@@ -308,6 +401,22 @@ class ShopwareProductSync
 			),
 			'active' => $product->status ? true : false,
 		);
+
+		if (!empty($manufacturerId)) {
+			$payload['manufacturerId'] = $manufacturerId;
+		}
+
+		$buyPrice = $this->getSupplierBuyPrice($product);
+		if ($buyPrice !== null) {
+			$payload['purchasePrices'] = array(
+				array(
+					'currencyId' => self::DEFAULT_CURRENCY_ID,
+					'gross' => $buyPrice,
+					'net' => $buyPrice,
+					'linked' => false,
+				),
+			);
+		}
 
 		$salesChannelId = getDolGlobalString('AUVOSHOPWARE_SW_SALES_CHANNEL_ID');
 		if (!empty($salesChannelId)) {
@@ -364,6 +473,8 @@ class ShopwareProductSync
 			$product->status ? '1' : '0',
 			(string) $product->stock_reel,
 			implode(',', $imageSignature),
+			(string) $this->getManufacturerName($product),
+			(string) $this->getSupplierBuyPrice($product),
 		));
 
 		return md5($data);
@@ -398,11 +509,21 @@ class ShopwareProductSync
 		// retry doesn't re-upload files that are already in Shopware.
 		$this->saveMapImages($product->id, $mediaResult['images']);
 
+		$manufacturerId = null;
+		$manufacturerName = $this->getManufacturerName($product);
+		if ($manufacturerName !== null) {
+			$manufacturerId = $this->ensureManufacturer($manufacturerName);
+			if ($manufacturerId === false) {
+				$this->saveMapRow($product->id, $swProductId, 'error', 'Manufacturer: '.$this->error);
+				return array('status' => 'error', 'sw_product_id' => $swProductId, 'error' => 'Manufacturer: '.$this->error);
+			}
+		}
+
 		$result = $this->client->sync(array(
 			'upsert-product' => array(
 				'entity' => 'product',
 				'action' => 'upsert',
-				'payload' => array($this->buildProductPayload($product, $mediaResult)),
+				'payload' => array($this->buildProductPayload($product, $mediaResult, $manufacturerId)),
 			),
 		));
 
