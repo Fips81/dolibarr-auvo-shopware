@@ -316,6 +316,21 @@ class ShopwareClient
 	}
 
 	/**
+	 * Run a Search API query (POST /api/search/{entity}). Unlike request()'s plain GET list calls
+	 * (used by listNamedEntities()), this supports filters, sorting and nested associations in one
+	 * round trip - needed for order import, where a single order needs its line items, customer
+	 * and addresses all resolved together.
+	 *
+	 * @param string $entity   Route name, e.g. 'order'
+	 * @param array  $criteria Search criteria body (filter, associations, sort, limit, page, ...)
+	 * @return array|false Decoded JSON response on success (see 'data'/'total'), false on error (see $this->error)
+	 */
+	public function search($entity, array $criteria)
+	{
+		return $this->request('POST', 'search/'.$entity, $criteria);
+	}
+
+	/**
 	 * Batch upsert/delete multiple entities of possibly different types in a single request,
 	 * via the Sync API (POST /api/_action/sync). This is the mechanism that solves auvopresta's
 	 * PHP-timeout problem (see PLAN.md): many products/variants/stock updates go out as one

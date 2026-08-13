@@ -64,8 +64,10 @@ if (!$res) {
  * @var User $user
  */
 require_once DOL_DOCUMENT_ROOT.'/product/class/product.class.php';
+require_once DOL_DOCUMENT_ROOT.'/commande/class/commande.class.php';
 require_once __DIR__.'/class/ShopwareClient.class.php';
 require_once __DIR__.'/class/ShopwareProductSync.class.php';
+require_once __DIR__.'/class/ShopwareOrderSync.class.php';
 
 // Load translation files required by the page
 $langs->loadLangs(array("auvoshopware@auvoshopware"));
@@ -86,6 +88,7 @@ $swClient = new ShopwareClient(
 );
 
 $sync = new ShopwareProductSync($db, $swClient);
+$orderSync = new ShopwareOrderSync($db, $user, $swClient);
 
 $isConfigured = getDolGlobalString('AUVOSHOPWARE_SW_URL')
 	&& getDolGlobalString('AUVOSHOPWARE_SW_CLIENT_ID')
@@ -97,7 +100,7 @@ $isConfigured = getDolGlobalString('AUVOSHOPWARE_SW_URL')
  * Actions
  */
 
-if (in_array($action, array('syncall', 'syncone'), true) && function_exists('set_time_limit')
+if (in_array($action, array('syncall', 'syncone', 'fetchorders'), true) && function_exists('set_time_limit')
 	&& stripos((string) ini_get('disable_functions'), 'set_time_limit') === false) {
 	// A large catalog can need minutes of sequential Sync API round trips - well past a typical
 	// web request's default execution time limit (see PLAN.md: this is exactly what crashed
@@ -125,6 +128,21 @@ if ($action == 'syncall' && $isConfigured) {
 		setEventMessages($langs->trans('AuVoShopwareSyncOneOk'), null, 'mesgs');
 	} else {
 		setEventMessages($langs->trans('AuVoShopwareSyncOneError', $result['error']), null, 'errors');
+	}
+} elseif ($action == 'fetchorders' && $isConfigured) {
+	if (!$canSync) {
+		accessforbidden();
+	}
+	$orderSummary = $orderSync->fetchNewOrders();
+	if ($orderSync->error !== '') {
+		setEventMessages($langs->trans('AuVoShopwareFetchOrdersError', $orderSync->error), null, 'errors');
+	} else {
+		$orderMsg = $langs->trans('AuVoShopwareFetchOrdersResult', $orderSummary['ok'], $orderSummary['skipped'], $orderSummary['error']);
+		if ($orderSummary['error'] > 0) {
+			setEventMessages($orderMsg, null, 'warnings');
+		} else {
+			setEventMessages($orderMsg, null, 'mesgs');
+		}
 	}
 }
 
@@ -190,6 +208,53 @@ if (!$isConfigured) {
 		print '<td class="right">';
 		if ($canSync) {
 			print '<a class="button_small" href="'.$_SERVER["PHP_SELF"].'?action=syncone&id='.$product->id.'&token='.newToken().'">'.$langs->trans("AuVoShopwareSyncOne").'</a>';
+		}
+		print '</td>';
+		print '</tr>';
+	}
+
+	print '</table>';
+
+	print '<br>';
+	print load_fiche_titre($langs->trans('AuVoShopwareOrders'), '', '');
+
+	if ($canSync) {
+		print '<div class="tabsAction">';
+		print '<a class="butAction" href="'.$_SERVER["PHP_SELF"].'?action=fetchorders&token='.newToken().'">'.$langs->trans("AuVoShopwareFetchOrders").'</a>';
+		print '</div>';
+	}
+
+	$importedOrders = $orderSync->getImportedOrders();
+
+	print '<table class="noborder centpercent">';
+	print '<tr class="liste_titre">';
+	print '<th>'.$langs->trans("AuVoShopwareSwOrderRef").'</th>';
+	print '<th>'.$langs->trans("Order").'</th>';
+	print '<th>'.$langs->trans("AuVoShopwareLastSync").'</th>';
+	print '<th>'.$langs->trans("Status").'</th>';
+	print '</tr>';
+
+	if (empty($importedOrders)) {
+		print '<tr class="oddeven"><td colspan="4" class="opacitymedium">'.$langs->trans("AuVoShopwareNoOrderImported").'</td></tr>';
+	}
+
+	foreach ($importedOrders as $row) {
+		print '<tr class="oddeven">';
+		print '<td>'.dol_escape_htmltag($row['sw_order_number']).'</td>';
+		print '<td>';
+		if (!empty($row['fk_commande'])) {
+			$commande = new Commande($db);
+			if ($commande->fetch($row['fk_commande']) > 0) {
+				print $commande->getNomUrl(1);
+			}
+		}
+		print '</td>';
+		print '<td>'.(!empty($row['last_sync_date']) ? dol_print_date($db->jdate($row['last_sync_date']), 'dayhour') : '').'</td>';
+		print '<td>';
+		if ($row['last_sync_status'] == 'ok') {
+			print img_picto($langs->trans("Ok"), 'tick');
+		} else {
+			print img_warning(dol_escape_htmltag($row['last_sync_error']));
 		}
 		print '</td>';
 		print '</tr>';

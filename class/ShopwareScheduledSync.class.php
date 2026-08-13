@@ -17,6 +17,7 @@
 
 require_once __DIR__.'/ShopwareClient.class.php';
 require_once __DIR__.'/ShopwareProductSync.class.php';
+require_once __DIR__.'/ShopwareOrderSync.class.php';
 
 /**
  * \file    auvoshopware/class/ShopwareScheduledSync.class.php
@@ -25,9 +26,7 @@ require_once __DIR__.'/ShopwareProductSync.class.php';
  *
  * Dolibarr's cron runner instantiates this with just $db and calls a method on it, so it can't
  * take the same constructor as ShopwareProductSync (which needs a configured API client) - this
- * builds one from the module's saved settings instead. Order fetch (PLAN.md phase 6) will be
- * added to syncAll() here once it exists, same as auvopresta's PrestaShopScheduledSync does for
- * PrestaShop orders.
+ * builds one from the module's saved settings instead.
  */
 class ShopwareScheduledSync
 {
@@ -66,6 +65,8 @@ class ShopwareScheduledSync
 	 */
 	public function syncAll()
 	{
+		global $user;
+
 		if (function_exists('set_time_limit') && stripos((string) ini_get('disable_functions'), 'set_time_limit') === false) {
 			set_time_limit(0);
 		}
@@ -99,6 +100,26 @@ class ShopwareScheduledSync
 				}
 			}
 			$this->error = implode('; ', $this->errors);
+		}
+
+		if ($user !== null) {
+			$orderSync = new ShopwareOrderSync($this->db, $user, $client);
+			$orderSummary = $orderSync->fetchNewOrders();
+
+			$this->output .= sprintf(
+				' | Orders: %d imported, %d error(s)',
+				$orderSummary['ok'],
+				$orderSummary['error']
+			);
+
+			if ($orderSummary['error'] > 0) {
+				foreach ($orderSummary['details'] as $swOrderId => $detail) {
+					if ($detail['status'] === 'error') {
+						$this->errors[] = 'Order '.$swOrderId.': '.($detail['error'] ?? 'unknown error');
+					}
+				}
+				$this->error = implode('; ', $this->errors);
+			}
 		}
 
 		return $summary['error'] > 0 && $summary['ok'] === 0 ? -1 : 0;
