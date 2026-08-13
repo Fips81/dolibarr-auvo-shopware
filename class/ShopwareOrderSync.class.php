@@ -17,6 +17,7 @@
 
 require_once DOL_DOCUMENT_ROOT.'/societe/class/societe.class.php';
 require_once DOL_DOCUMENT_ROOT.'/commande/class/commande.class.php';
+require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
 
 /**
  * \file    auvoshopware/class/ShopwareOrderSync.class.php
@@ -125,7 +126,7 @@ class ShopwareOrderSync
 		}
 
 		$societe = new Societe($this->db);
-		if ($societe->fetch(0, '', '', '', '', '', '', '', '', $email) <= 0) {
+		if ($societe->fetch(0, '', '', '', '', '', '', '', '', '', $email) <= 0) {
 			$societe = new Societe($this->db);
 			$firstname = trim((string) ($customerData['firstName'] ?? ''));
 			$lastname = trim((string) ($customerData['lastName'] ?? ''));
