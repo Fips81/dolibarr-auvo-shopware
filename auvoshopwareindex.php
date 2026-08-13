@@ -230,25 +230,26 @@ if (!$isConfigured) {
 	print '<tr class="liste_titre">';
 	print '<th>'.$langs->trans("AuVoShopwareSwOrderRef").'</th>';
 	print '<th>'.$langs->trans("Order").'</th>';
+	print '<th class="right">'.$langs->trans("AuVoShopwareOrderTotal").'</th>';
+	print '<th>'.$langs->trans("AuVoShopwareOrderStatus").'</th>';
 	print '<th>'.$langs->trans("AuVoShopwareLastSync").'</th>';
-	print '<th>'.$langs->trans("Status").'</th>';
+	print '<th>'.$langs->trans("AuVoShopwareSyncStatus").'</th>';
 	print '</tr>';
 
 	if (empty($importedOrders)) {
-		print '<tr class="oddeven"><td colspan="4" class="opacitymedium">'.$langs->trans("AuVoShopwareNoOrderImported").'</td></tr>';
+		print '<tr class="oddeven"><td colspan="6" class="opacitymedium">'.$langs->trans("AuVoShopwareNoOrderImported").'</td></tr>';
 	}
 
 	foreach ($importedOrders as $row) {
 		print '<tr class="oddeven">';
 		print '<td>'.dol_escape_htmltag($row['sw_order_number']).'</td>';
-		print '<td>';
-		if (!empty($row['fk_commande'])) {
-			$commande = new Commande($db);
-			if ($commande->fetch($row['fk_commande']) > 0) {
-				print $commande->getNomUrl(1);
-			}
-		}
-		print '</td>';
+
+		$commande = !empty($row['fk_commande']) ? new Commande($db) : null;
+		$commandeLoaded = $commande !== null && $commande->fetch($row['fk_commande']) > 0;
+
+		print '<td>'.($commandeLoaded ? $commande->getNomUrl(1) : '').'</td>';
+		print '<td class="right">'.($commandeLoaded ? price($commande->total_ttc) : '').'</td>';
+		print '<td>'.($commandeLoaded ? $commande->getLibStatut(5) : '').'</td>';
 		print '<td>'.(!empty($row['last_sync_date']) ? dol_print_date($db->jdate($row['last_sync_date']), 'dayhour') : '').'</td>';
 		print '<td>';
 		if ($row['last_sync_status'] == 'ok') {

@@ -74,3 +74,6 @@ AuVoShopwareFetchOrdersResult = Order fetch done: %s imported, %s skipped (alrea
 AuVoShopwareFetchOrdersError = Order fetch failed: %s
 AuVoShopwareNoOrderImported = No order imported yet
 AuVoShopwareSwOrderRef = Shopware order number
+AuVoShopwareOrderTotal = Order total
+AuVoShopwareOrderStatus = Order status
+AuVoShopwareSyncStatus = Sync status

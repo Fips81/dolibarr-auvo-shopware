@@ -74,3 +74,6 @@ AuVoShopwareFetchOrdersResult = Bestellabruf abgeschlossen: %s importiert, %s ü
 AuVoShopwareFetchOrdersError = Bestellabruf fehlgeschlagen: %s
 AuVoShopwareNoOrderImported = Noch keine Bestellung importiert
 AuVoShopwareSwOrderRef = Shopware-Bestellnummer
+AuVoShopwareOrderTotal = Auftragswert
+AuVoShopwareOrderStatus = Auftragsstatus
+AuVoShopwareSyncStatus = Sync-Status
