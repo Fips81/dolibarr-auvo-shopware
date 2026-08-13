@@ -221,6 +221,18 @@ if (getDolGlobalString('AUVOSHOPWARE_SW_URL') && getDolGlobalString('AUVOSHOPWAR
 	print '</table>';
 	print '</div></div>';
 	print '<br>';
+
+	print '<table class="noborder centpercent">';
+	print '<tr class="liste_titre"><th colspan="2">'.$langs->trans('AuVoShopwareCategories').'</th></tr>';
+	$categories = $swClientForRef->listNamedEntities('category');
+	if (empty($categories)) {
+		print '<tr class="oddeven"><td colspan="2" class="opacitymedium">'.$langs->trans('AuVoShopwareReferenceValuesError', $swClientForRef->error).'</td></tr>';
+	}
+	foreach ($categories as $category) {
+		print '<tr class="oddeven"><td>'.dol_escape_htmltag($category['name']).'</td><td><code>'.dol_escape_htmltag($category['id']).'</code></td></tr>';
+	}
+	print '</table>';
+	print '<br>';
 }
 
 if (empty($setupnotempty)) {

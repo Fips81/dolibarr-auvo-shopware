@@ -40,6 +40,7 @@ AuVoShopwareReferenceValuesDesc = Shopware does not always show these IDs as pla
 AuVoShopwareReferenceValuesError = Could not load: %s
 AuVoShopwareTaxRates = Tax rates
 AuVoShopwareSalesChannels = Sales channels
+AuVoShopwareCategories = Categories
 
 #
 # About page
