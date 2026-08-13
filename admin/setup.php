@@ -124,9 +124,24 @@ $item = $formSetup->newItem('AUVOSHOPWARE_SW_SALES_CHANNEL_ID');
 $item->helpText = $langs->trans('AUVOSHOPWARE_SW_SALES_CHANNEL_IDTooltip');
 $item->cssClass = 'minwidth300';
 
-// AUVOSHOPWARE_ORDER_STATE_SCOPE is added once ShopwareClient exists (phase 3+): its options
-// are loaded live from the shop's order state machine, same pattern as auvopresta's order
-// state multiselect (see PLAN.md phase 8).
+// Which Shopware orders get imported as Dolibarr sales orders. Options are loaded live from the
+// shop (needs URL + credentials already saved), so this field only appears once those are
+// configured; falls back to "everything except cancelled" if left empty (see
+// ShopwareOrderSync::isOrderInScope()) - filtering on payment status instead would silently skip
+// "Rechnung"/"Nachnahme" orders, which sit unpaid until well after they need to be fulfilled.
+if (getDolGlobalString('AUVOSHOPWARE_SW_URL') && getDolGlobalString('AUVOSHOPWARE_SW_CLIENT_ID') && getDolGlobalString('AUVOSHOPWARE_SW_CLIENT_SECRET')) {
+	$swClientForOrderStates = new ShopwareClient(
+		getDolGlobalString('AUVOSHOPWARE_SW_URL'),
+		getDolGlobalString('AUVOSHOPWARE_SW_CLIENT_ID'),
+		getDolGlobalString('AUVOSHOPWARE_SW_CLIENT_SECRET')
+	);
+	$orderStatesForSetup = $swClientForOrderStates->listOrderStates();
+	if (!empty($orderStatesForSetup)) {
+		$item = $formSetup->newItem('AUVOSHOPWARE_ORDER_STATE_SCOPE');
+		$item->setAsMultiSelect($orderStatesForSetup);
+		$item->helpText = $langs->trans('AUVOSHOPWARE_ORDER_STATE_SCOPETooltip');
+	}
+}
 
 $setupnotempty = count($formSetup->items);
 

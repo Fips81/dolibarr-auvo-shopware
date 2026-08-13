@@ -246,6 +246,40 @@ class ShopwareClient
 	}
 
 	/**
+	 * List every state of Shopware's built-in order state machine ("order.state") as
+	 * [id => translated name], for the setup page's order-import-scope multiselect
+	 * (AUVOSHOPWARE_ORDER_STATE_SCOPE). Unlike listNamedEntities()'s plain GET list, this needs
+	 * the Search API to filter state_machine_state rows down to just this one machine - a plain
+	 * list would also return every state of order_transaction.state, order_delivery.state and any
+	 * custom state machines in the shop.
+	 *
+	 * @return array<string, string> Empty array on error (see $this->error)
+	 */
+	public function listOrderStates()
+	{
+		$criteria = array(
+			'filter' => array(
+				array('type' => 'equals', 'field' => 'stateMachine.technicalName', 'value' => 'order.state'),
+			),
+			'limit' => 100,
+		);
+
+		$result = $this->search('state-machine-state', $criteria);
+		if (!is_array($result) || empty($result['data']) || !is_array($result['data'])) {
+			return array();
+		}
+
+		$states = array();
+		foreach ($result['data'] as $row) {
+			if (isset($row['id'])) {
+				$states[$row['id']] = (string) ($row['name'] ?? ($row['technicalName'] ?? $row['id']));
+			}
+		}
+
+		return $states;
+	}
+
+	/**
 	 * Upload the binary content of a file into an already-existing (empty) media entity - the
 	 * second of two steps needed to give a product an image via the Admin API. Step one is
 	 * creating the media entity itself (e.g. via sync(), entity 'media', action 'upsert', with

@@ -22,7 +22,7 @@ require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
 /**
  * \file    auvoshopware/class/ShopwareOrderSync.class.php
  * \ingroup auvoshopware
- * \brief   Pull paid Shopware orders into Dolibarr as sales orders (Commande) - the reverse
+ * \brief   Pull in-scope Shopware orders into Dolibarr as sales orders (Commande) - the reverse
  *          direction of ShopwareProductSync, via the Admin API's Search route (unlike
  *          PrestaShop, Shopware has a single API that covers orders too, no separate legacy
  *          client needed).
@@ -62,10 +62,9 @@ class ShopwareOrderSync
 	}
 
 	/**
-	 * Import every Shopware order that has at least one paid transaction and hasn't already been
-	 * successfully imported. A configurable import scope (like auvopresta's order-state
-	 * multiselect) is deferred to PLAN.md phase 8, alongside status push-back - for now "paid"
-	 * (or "partially paid") is the fixed, safe default.
+	 * Import every Shopware order that is in the configured import scope (setup page,
+	 * AUVOSHOPWARE_ORDER_STATE_SCOPE - falls back to "every order except cancelled ones" if left
+	 * unconfigured) and hasn't already been successfully imported.
 	 *
 	 * @return array{ok:int, skipped:int, error:int, details:array<string,array>}
 	 */
@@ -81,7 +80,7 @@ class ShopwareOrderSync
 
 		foreach ($orders as $swOrder) {
 			$swOrderId = (string) ($swOrder['id'] ?? '');
-			if ($swOrderId === '' || !$this->isOrderPaid($swOrder)) {
+			if ($swOrderId === '' || !$this->isOrderInScope($swOrder)) {
 				continue;
 			}
 
@@ -230,8 +229,8 @@ class ShopwareOrderSync
 	}
 
 	/**
-	 * Pull every order from Shopware, with the associations importOrder()/isOrderPaid() need
-	 * (line items, customer, billing address, transaction states) loaded in the same round trip.
+	 * Pull every order from Shopware, with the associations importOrder()/isOrderInScope() need
+	 * (line items, customer, billing address, overall order status) loaded in the same round trip.
 	 * Paginates through the Search API's page-based results (Shopware caps a single page at a
 	 * few hundred rows) rather than assuming everything fits in one response.
 	 *
@@ -249,9 +248,7 @@ class ShopwareOrderSync
 					'lineItems' => new stdClass(),
 					'orderCustomer' => new stdClass(),
 					'addresses' => new stdClass(),
-					'transactions' => array(
-						'associations' => array('stateMachineState' => new stdClass()),
-					),
+					'stateMachineState' => new stdClass(),
 				),
 				'sort' => array(array('field' => 'orderDateTime', 'order' => 'ASC')),
 				'limit' => $limit,
@@ -273,22 +270,41 @@ class ShopwareOrderSync
 	}
 
 	/**
-	 * Whether a Shopware order has at least one transaction in a "paid" state - the fixed default
-	 * import scope until phase 8's configurable state selection lands.
+	 * Whether a Shopware order is in the configured import scope. Deliberately filters on the
+	 * overall order status (order.state: open/in_progress/completed/cancelled), not payment
+	 * status - "Rechnung"/"Nachnahme" orders sit in an unpaid transaction state until well after
+	 * they need to be fulfilled, so gating import on "paid" would silently skip them.
 	 *
 	 * @param array $swOrder
 	 * @return bool
 	 */
-	protected function isOrderPaid(array $swOrder)
+	protected function isOrderInScope(array $swOrder)
 	{
-		foreach ($swOrder['transactions'] ?? array() as $transaction) {
-			$technicalName = $transaction['stateMachineState']['technicalName'] ?? null;
-			if (in_array($technicalName, array('paid', 'paid_partially'), true)) {
-				return true;
-			}
+		$allowedIds = $this->getConfiguredOrderStateIds();
+		if (!empty($allowedIds)) {
+			return in_array((string) ($swOrder['stateId'] ?? ''), $allowedIds, true);
 		}
 
-		return false;
+		// Unconfigured: import everything except cancelled orders.
+		$technicalName = $swOrder['stateMachineState']['technicalName'] ?? null;
+		return $technicalName !== 'cancelled';
+	}
+
+	/**
+	 * Order state ids allowed to be imported, per the setup page's multi-select
+	 * (AUVOSHOPWARE_ORDER_STATE_SCOPE, stored comma-separated Shopware state-machine-state
+	 * UUIDs). Empty means "not configured" - isOrderInScope() applies its own default then.
+	 *
+	 * @return string[]
+	 */
+	protected function getConfiguredOrderStateIds()
+	{
+		$raw = getDolGlobalString('AUVOSHOPWARE_ORDER_STATE_SCOPE');
+		if ($raw === '') {
+			return array();
+		}
+
+		return array_values(array_filter(array_map('trim', explode(',', $raw))));
 	}
 
 	/**

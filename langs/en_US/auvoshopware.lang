@@ -30,6 +30,8 @@ AUVOSHOPWARE_SW_TAX_ID = Tax rate ID (Shopware)
 AUVOSHOPWARE_SW_TAX_IDTooltip = UUID of the Shopware tax rate applied to all synchronized products
 AUVOSHOPWARE_SW_SALES_CHANNEL_ID = Sales channel ID (Shopware)
 AUVOSHOPWARE_SW_SALES_CHANNEL_IDTooltip = UUID of the Shopware sales channel synchronized products must be visible/active in
+AUVOSHOPWARE_ORDER_STATE_SCOPE = Order statuses to import (Shopware)
+AUVOSHOPWARE_ORDER_STATE_SCOPETooltip = Only orders in one of these statuses are imported as a Dolibarr sales order. Leave empty to import everything except cancelled orders, regardless of payment status - important for invoice/cash-on-delivery orders, which are only marked paid much later.
 
 AuVoShopwareTestConnection = Test connection
 AuVoShopwareConnectionOk = Connection to the Shopware Admin API successful
