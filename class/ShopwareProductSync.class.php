@@ -431,6 +431,8 @@ class ShopwareProductSync
 		$configuratorSettings = array();
 		$variantProducts = array();
 		$errors = array();
+		// fkAttribute => (fkAttributeValue => display position), filled in lazily below.
+		$attributeValuePositions = array();
 
 		foreach ($combinations as $combination) {
 			$pairs = new ProductCombination2ValuePair($this->db);
@@ -459,11 +461,35 @@ class ShopwareProductSync
 					break;
 				}
 
+				// Without an explicit position, Shopware falls back to alphabetical display order
+				// (found live: sizes came out as "3XL, 4XL, 128, 140, ..., L, M, S, XL, XXL"
+				// instead of a size progression). Assign each value's position from Dolibarr's
+				// own attribute-value order instead of the order combinations happen to
+				// reference them in - same fix auvopresta needed for PrestaShop option values.
+				if (!isset($attributeValuePositions[$pair->fk_prod_attr])) {
+					$positions = array();
+					$attributeValueObj = new ProductAttributeValue($this->db);
+					$orderedValues = $attributeValueObj->fetchAllByProductAttribute($pair->fk_prod_attr, true);
+					if (is_array($orderedValues)) {
+						$position = 0;
+						foreach ($orderedValues as $orderedValue) {
+							$positions[$orderedValue->id] = $position;
+							$position++;
+						}
+					}
+					$attributeValuePositions[$pair->fk_prod_attr] = $positions;
+				}
+
 				$groupId = $this->propertyGroupUuid($pair->fk_prod_attr);
 				$optionId = $this->propertyGroupOptionUuid($pair->fk_prod_attr_val);
 
 				$propertyGroups[$groupId] = array('id' => $groupId, 'name' => $attribute->label);
-				$propertyGroupOptions[$optionId] = array('id' => $optionId, 'groupId' => $groupId, 'name' => $attributeValue->value);
+				$propertyGroupOptions[$optionId] = array(
+					'id' => $optionId,
+					'groupId' => $groupId,
+					'name' => $attributeValue->value,
+					'position' => $attributeValuePositions[$pair->fk_prod_attr][$pair->fk_prod_attr_val] ?? 0,
+				);
 				$configuratorSettings[$optionId] = array(
 					'id' => $this->configuratorSettingUuid($parent->ref, $pair->fk_prod_attr_val),
 					'optionId' => $optionId,
