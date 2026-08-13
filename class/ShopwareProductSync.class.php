@@ -483,7 +483,10 @@ class ShopwareProductSync
 				$groupId = $this->propertyGroupUuid($pair->fk_prod_attr);
 				$optionId = $this->propertyGroupOptionUuid($pair->fk_prod_attr_val);
 
-				$propertyGroups[$groupId] = array('id' => $groupId, 'name' => $attribute->label);
+				// sortingType defaults to alphabetical display regardless of each option's own
+				// "position" field (found live: setting position alone had no visible effect) -
+				// must be set explicitly to make position the thing that actually orders options.
+				$propertyGroups[$groupId] = array('id' => $groupId, 'name' => $attribute->label, 'sortingType' => 'position');
 				$propertyGroupOptions[$optionId] = array(
 					'id' => $optionId,
 					'groupId' => $groupId,
