@@ -320,6 +320,30 @@ class ShopwareProductSync
 	}
 
 	/**
+	 * Manufacturer's suggested retail price (gross, incl. VAT) from the product's
+	 * "hersteller_uvp" extrafield, or null if empty/not set/not a positive number. Used as
+	 * Shopware's "listPrice" (the crossed-out reference price shown next to a discounted price).
+	 *
+	 * @param Product $product
+	 * @return float|null
+	 */
+	protected function getManufacturerUvpGross(Product $product)
+	{
+		if (!is_array($product->array_options) || $product->array_options === array()) {
+			$product->fetch_optionals();
+		}
+
+		$raw = $product->array_options['options_hersteller_uvp'] ?? '';
+		if ($raw === '' || $raw === null) {
+			return null;
+		}
+
+		$value = (float) price2num($raw);
+
+		return $value > 0 ? $value : null;
+	}
+
+	/**
 	 * Ensure a Shopware product_manufacturer entity exists for the given name, and return its id.
 	 *
 	 * @param string $name
@@ -733,6 +757,27 @@ class ShopwareProductSync
 	 */
 	public function buildProductPayload(Product $product, array $mediaResult = array(), $manufacturerId = null, array $dolCategoryIds = array())
 	{
+		$priceEntry = array(
+			'currencyId' => self::DEFAULT_CURRENCY_ID,
+			'gross' => (float) $product->price_ttc,
+			'net' => (float) $product->price,
+			'linked' => false,
+		);
+
+		// "Streichpreis": Shopware's crossed-out reference price shown next to the actual price,
+		// from the "hersteller_uvp" extrafield (gross/incl. VAT, per the user). Net is derived
+		// via the same price/price_ttc ratio already used for variant prices.
+		$uvpGross = $this->getManufacturerUvpGross($product);
+		if ($uvpGross !== null) {
+			$vatRatio = ((float) $product->price_ttc) > 0 ? ((float) $product->price / (float) $product->price_ttc) : 1.0;
+			$priceEntry['listPrice'] = array(
+				'currencyId' => self::DEFAULT_CURRENCY_ID,
+				'gross' => $uvpGross,
+				'net' => round($uvpGross * $vatRatio, 2),
+				'linked' => false,
+			);
+		}
+
 		$payload = array(
 			'id' => $this->productUuid($product->ref),
 			'productNumber' => $product->ref,
@@ -740,14 +785,7 @@ class ShopwareProductSync
 			'description' => (string) $product->description,
 			'stock' => (int) $product->stock_reel,
 			'taxId' => getDolGlobalString('AUVOSHOPWARE_SW_TAX_ID'),
-			'price' => array(
-				array(
-					'currencyId' => self::DEFAULT_CURRENCY_ID,
-					'gross' => (float) $product->price_ttc,
-					'net' => (float) $product->price,
-					'linked' => false,
-				),
-			),
+			'price' => array($priceEntry),
 			'active' => $product->status ? true : false,
 		);
 
@@ -843,6 +881,7 @@ class ShopwareProductSync
 			implode(',', $imageSignature),
 			(string) $this->getManufacturerName($product),
 			(string) $this->getSupplierBuyPrice($product),
+			(string) $this->getManufacturerUvpGross($product),
 			implode(',', $variantSignature),
 			implode(',', $dolCategoryIds),
 		));
