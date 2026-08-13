@@ -70,7 +70,7 @@ require_once __DIR__.'/class/ShopwareProductSync.class.php';
 require_once __DIR__.'/class/ShopwareOrderSync.class.php';
 
 // Load translation files required by the page
-$langs->loadLangs(array("auvoshopware@auvoshopware"));
+$langs->loadLangs(array("orders", "auvoshopware@auvoshopware"));
 
 $action = GETPOST('action', 'aZ09');
 $productId = GETPOSTINT('id');
