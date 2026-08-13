@@ -77,3 +77,7 @@ AuVoShopwareSwOrderRef = Shopware-Bestellnummer
 AuVoShopwareOrderTotal = Auftragswert
 AuVoShopwareOrderStatus = Auftragsstatus
 AuVoShopwareSyncStatus = Sync-Status
+AuVoShopwarePushOrderStatus = Status an Shopware melden
+AuVoShopwarePushOrderStatusOk = Bestellstatus erfolgreich an Shopware übertragen
+AuVoShopwarePushOrderStatusSkipped = Nichts zu übertragen (kein zugeordneter Shopware-Status oder Shopware-Bestellung ist bereits in diesem Status)
+AuVoShopwarePushOrderStatusError = Übertragung des Bestellstatus fehlgeschlagen: %s

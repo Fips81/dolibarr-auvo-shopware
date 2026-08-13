@@ -74,6 +74,7 @@ $langs->loadLangs(array("orders", "auvoshopware@auvoshopware"));
 
 $action = GETPOST('action', 'aZ09');
 $productId = GETPOSTINT('id');
+$commandeId = GETPOSTINT('commandeid');
 
 // Access control
 if (!$user->hasRight('auvoshopware', 'sync', 'read')) {
@@ -143,6 +144,18 @@ if ($action == 'syncall' && $isConfigured) {
 		} else {
 			setEventMessages($orderMsg, null, 'mesgs');
 		}
+	}
+} elseif ($action == 'pushorderstatus' && $commandeId > 0 && $isConfigured) {
+	if (!$canSync) {
+		accessforbidden();
+	}
+	$result = $orderSync->pushOrderStatus($commandeId);
+	if ($result['status'] == 'ok') {
+		setEventMessages($langs->trans('AuVoShopwarePushOrderStatusOk'), null, 'mesgs');
+	} elseif ($result['status'] == 'skipped') {
+		setEventMessages($langs->trans('AuVoShopwarePushOrderStatusSkipped'), null, 'warnings');
+	} else {
+		setEventMessages($langs->trans('AuVoShopwarePushOrderStatusError', $result['error']), null, 'errors');
 	}
 }
 
@@ -234,10 +247,11 @@ if (!$isConfigured) {
 	print '<th>'.$langs->trans("AuVoShopwareOrderStatus").'</th>';
 	print '<th>'.$langs->trans("AuVoShopwareLastSync").'</th>';
 	print '<th>'.$langs->trans("AuVoShopwareSyncStatus").'</th>';
+	print '<th></th>';
 	print '</tr>';
 
 	if (empty($importedOrders)) {
-		print '<tr class="oddeven"><td colspan="6" class="opacitymedium">'.$langs->trans("AuVoShopwareNoOrderImported").'</td></tr>';
+		print '<tr class="oddeven"><td colspan="7" class="opacitymedium">'.$langs->trans("AuVoShopwareNoOrderImported").'</td></tr>';
 	}
 
 	foreach ($importedOrders as $row) {
@@ -256,6 +270,11 @@ if (!$isConfigured) {
 			print img_picto($langs->trans("Ok"), 'tick');
 		} else {
 			print img_warning(dol_escape_htmltag($row['last_sync_error']));
+		}
+		print '</td>';
+		print '<td class="right">';
+		if ($canSync && $commandeLoaded) {
+			print '<a class="button_small" href="'.$_SERVER["PHP_SELF"].'?action=pushorderstatus&commandeid='.$commande->id.'&token='.newToken().'">'.$langs->trans("AuVoShopwarePushOrderStatus").'</a>';
 		}
 		print '</td>';
 		print '</tr>';

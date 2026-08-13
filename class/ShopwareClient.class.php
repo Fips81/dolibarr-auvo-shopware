@@ -210,6 +210,42 @@ class ShopwareClient
 	}
 
 	/**
+	 * List the state-machine transitions available from an order's *current* status (GET
+	 * /api/_action/state-machine/order/{orderId}/state) - Shopware's own way to discover valid
+	 * next moves, so callers never have to guess a transition's technical action name (see
+	 * PLAN.md: order status is a real state machine here, unlike PrestaShop's flag system).
+	 * Every row shares the same current state in 'fromStateName'; 'toStateName' is where that
+	 * row's 'actionName' would lead.
+	 *
+	 * @param string $orderId
+	 * @return array<int, array{actionName:string, fromStateName:?string, toStateName:?string}>|false Empty array if the order has no outgoing transition (terminal state), false on error (see $this->error)
+	 */
+	public function getAvailableOrderTransitions($orderId)
+	{
+		$result = $this->request('GET', '_action/state-machine/order/'.$orderId.'/state');
+		if (!is_array($result) || !isset($result['transitions']) || !is_array($result['transitions'])) {
+			return false;
+		}
+
+		return $result['transitions'];
+	}
+
+	/**
+	 * Execute one state-machine transition on an order (POST
+	 * /api/_action/state-machine/order/{orderId}/state/{actionName}). $actionName must be one
+	 * returned by getAvailableOrderTransitions() for this order's current state - the API
+	 * rejects anything else.
+	 *
+	 * @param string $orderId
+	 * @param string $actionName
+	 * @return array|false Decoded JSON of the resulting state entity on success, false on error (see $this->error)
+	 */
+	public function transitionOrderState($orderId, $actionName)
+	{
+		return $this->request('POST', '_action/state-machine/order/'.$orderId.'/state/'.rawurlencode($actionName));
+	}
+
+	/**
 	 * Check that the configured shop URL and credentials work: fetches the OAuth2 token and
 	 * does one lightweight, always-available read (a single product, if any exist).
 	 *

@@ -197,6 +197,139 @@ class ShopwareOrderSync
 	}
 
 	/**
+	 * Push a Dolibarr order's status to its linked Shopware order via a state-machine
+	 * transition, if the current Dolibarr status has a defined Shopware counterpart (draft/
+	 * validated have none - "open" is already what a freshly imported order sits at in
+	 * Shopware, so there's nothing to push for those). Returns 'skipped' if there's no mapped
+	 * target, the Shopware order is already there, or it has no outgoing transition at all
+	 * (terminal state).
+	 *
+	 * @param int $fkCommande
+	 * @return array{status:string, error?:string}
+	 */
+	public function pushOrderStatus($fkCommande)
+	{
+		$commande = new Commande($this->db);
+		if ($commande->fetch($fkCommande) <= 0) {
+			return array('status' => 'error', 'error' => 'Dolibarr order not found: '.$fkCommande);
+		}
+
+		$map = $this->getOrderMapByCommande($fkCommande);
+		if ($map === null) {
+			return array('status' => 'error', 'error' => 'No Shopware order linked to this Dolibarr order');
+		}
+
+		$target = $this->targetShopwareStateForStatus((int) $commande->status);
+		if ($target === null) {
+			return array('status' => 'skipped');
+		}
+
+		return $this->transitionOrderTo($map['sw_order_id'], $target);
+	}
+
+	/**
+	 * Which Shopware order.state technical name a Dolibarr order status maps to, if any.
+	 *
+	 * @param int $status One of Commande::STATUS_*
+	 * @return string|null
+	 */
+	protected function targetShopwareStateForStatus($status)
+	{
+		if ($status === Commande::STATUS_SHIPMENTONPROCESS) {
+			return 'in_progress';
+		}
+		if ($status === Commande::STATUS_CLOSED) {
+			return 'completed';
+		}
+		if ($status === Commande::STATUS_CANCELED) {
+			return 'cancelled';
+		}
+
+		return null;
+	}
+
+	/**
+	 * Drive a Shopware order's state machine towards $targetTechnicalName, one transition at a
+	 * time, always picking from the API's own "available transitions from the current state"
+	 * list (see ShopwareClient::getAvailableOrderTransitions()) rather than guessing an action
+	 * name. Shopware's default order.state machine is a linear chain (open -> in_progress ->
+	 * completed, plus a cancel branch from either), so a direct match is usually reachable
+	 * within a couple of hops; if a state ever offers more than one way forward with no direct
+	 * match to the target, that's ambiguous and reported as an error instead of guessed at.
+	 *
+	 * @param string $swOrderId
+	 * @param string $targetTechnicalName
+	 * @param int    $maxHops
+	 * @return array{status:string, error?:string}
+	 */
+	protected function transitionOrderTo($swOrderId, $targetTechnicalName, $maxHops = 3)
+	{
+		for ($hop = 0; $hop < $maxHops; $hop++) {
+			$transitions = $this->client->getAvailableOrderTransitions($swOrderId);
+			if ($transitions === false) {
+				return array('status' => 'error', 'error' => $this->client->error);
+			}
+
+			if (empty($transitions)) {
+				return array('status' => 'skipped');
+			}
+
+			$currentStateName = $transitions[0]['fromStateName'] ?? null;
+			if ($currentStateName === $targetTechnicalName) {
+				return array('status' => 'skipped');
+			}
+
+			$directMatch = null;
+			foreach ($transitions as $transition) {
+				if (($transition['toStateName'] ?? null) === $targetTechnicalName) {
+					$directMatch = $transition;
+					break;
+				}
+			}
+
+			if ($directMatch !== null) {
+				if ($this->client->transitionOrderState($swOrderId, $directMatch['actionName']) === false) {
+					return array('status' => 'error', 'error' => $this->client->error);
+				}
+				return array('status' => 'ok');
+			}
+
+			if (count($transitions) !== 1) {
+				return array('status' => 'error', 'error' => 'Ambiguous transition from Shopware order state "'.$currentStateName.'": none of the available actions lead to "'.$targetTechnicalName.'"');
+			}
+
+			// Exactly one way forward from here - take it and re-check from the new state.
+			if ($this->client->transitionOrderState($swOrderId, $transitions[0]['actionName']) === false) {
+				return array('status' => 'error', 'error' => $this->client->error);
+			}
+		}
+
+		return array('status' => 'error', 'error' => 'Could not reach Shopware order state "'.$targetTechnicalName.'" within '.$maxHops.' transition(s)');
+	}
+
+	/**
+	 * Reverse lookup: find the order mapping row for a Dolibarr order id.
+	 *
+	 * @param int $fkCommande
+	 * @return array{sw_order_id:string}|null
+	 */
+	protected function getOrderMapByCommande($fkCommande)
+	{
+		global $conf;
+
+		$sql = 'SELECT sw_order_id FROM '.$this->db->prefix().'auvoshopware_order_map';
+		$sql .= ' WHERE fk_commande = '.((int) $fkCommande);
+		$sql .= ' AND entity = '.((int) $conf->entity);
+
+		$resql = $this->db->query($sql);
+		if ($resql && ($obj = $this->db->fetch_object($resql))) {
+			return array('sw_order_id' => $obj->sw_order_id);
+		}
+
+		return null;
+	}
+
+	/**
 	 * List every Shopware order imported so far (for the dashboard).
 	 *
 	 * @return array<int,array>

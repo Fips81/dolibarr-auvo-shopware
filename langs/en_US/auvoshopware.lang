@@ -77,3 +77,7 @@ AuVoShopwareSwOrderRef = Shopware order number
 AuVoShopwareOrderTotal = Order total
 AuVoShopwareOrderStatus = Order status
 AuVoShopwareSyncStatus = Sync status
+AuVoShopwarePushOrderStatus = Push status to Shopware
+AuVoShopwarePushOrderStatusOk = Order status pushed to Shopware successfully
+AuVoShopwarePushOrderStatusSkipped = Nothing to push (no mapped Shopware status, or the Shopware order is already in that status)
+AuVoShopwarePushOrderStatusError = Failed to push order status: %s
