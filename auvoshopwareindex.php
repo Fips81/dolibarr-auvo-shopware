@@ -120,7 +120,7 @@ if ($action == 'syncall' && $isConfigured) {
 	if (!$canSync) {
 		accessforbidden();
 	}
-	$result = $sync->syncOne($productId, true);
+	$result = $sync->syncOne($productId, null, true);
 	if ($result['status'] == 'ok') {
 		setEventMessages($langs->trans('AuVoShopwareSyncOneOk'), null, 'mesgs');
 	} else {

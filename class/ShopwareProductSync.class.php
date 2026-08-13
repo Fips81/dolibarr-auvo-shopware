@@ -85,12 +85,14 @@ class ShopwareProductSync
 	}
 
 	/**
-	 * List ids of Dolibarr products that belong to the configured root category
-	 * (AUVOSHOPWARE_CATEGORY_ID) or one of its subcategories, excluding variant children.
+	 * dolCategoryId => dolParentCategoryId for the configured root category
+	 * (AUVOSHOPWARE_CATEGORY_ID) and all its descendants, in parent-before-child order (root's
+	 * own "parent" is 0). Shared by getSyncableProductCategoryMap() (which products are in
+	 * scope) and buildCategoryOperations() (which Shopware categories to mirror).
 	 *
-	 * @return int[]
+	 * @return array<int, int>
 	 */
-	public function getSyncableProductIds()
+	protected function getInScopeCategoryParents()
 	{
 		$rootId = getDolGlobalInt('AUVOSHOPWARE_CATEGORY_ID');
 		if (empty($rootId)) {
@@ -101,7 +103,7 @@ class ShopwareProductSync
 		$fullArbo = $tmpcateg->get_full_arbo('product');
 
 		// Walk the full category tree to collect the root category and all its descendants.
-		$categIds = array($rootId => true);
+		$categParents = array($rootId => 0);
 		if (is_array($fullArbo)) {
 			$changed = true;
 			while ($changed) {
@@ -109,16 +111,29 @@ class ShopwareProductSync
 				foreach ($fullArbo as $categ) {
 					$id = is_array($categ) ? ($categ['id'] ?? null) : ($categ->id ?? null);
 					$parent = is_array($categ) ? ($categ['id_mere'] ?? $categ['fk_parent'] ?? 0) : ($categ->id_mere ?? $categ->fk_parent ?? 0);
-					if ($id !== null && isset($categIds[$parent]) && !isset($categIds[$id])) {
-						$categIds[$id] = true;
+					if ($id !== null && isset($categParents[$parent]) && !isset($categParents[$id])) {
+						$categParents[$id] = (int) $parent;
 						$changed = true;
 					}
 				}
 			}
 		}
 
-		$productIds = array();
-		foreach (array_keys($categIds) as $categId) {
+		return $categParents;
+	}
+
+	/**
+	 * Map Dolibarr products that belong to the configured root category
+	 * (AUVOSHOPWARE_CATEGORY_ID) or one of its subcategories, to the specific in-scope category
+	 * id(s) each one is directly assigned to (a product can be assigned to more than one).
+	 * Excludes variant children.
+	 *
+	 * @return array<int,int[]> Dolibarr product id => list of Dolibarr category ids
+	 */
+	public function getSyncableProductCategoryMap()
+	{
+		$productCategories = array();
+		foreach (array_keys($this->getInScopeCategoryParents()) as $categId) {
 			$categ = new Categorie($this->db);
 			if ($categ->fetch($categId) > 0) {
 				$objs = $categ->getObjectsInCateg('product', 1);
@@ -126,14 +141,25 @@ class ShopwareProductSync
 					foreach ($objs as $id) {
 						$id = (int) $id;
 						if (!$this->isVariantChild($id)) {
-							$productIds[$id] = true;
+							$productCategories[$id][] = (int) $categId;
 						}
 					}
 				}
 			}
 		}
 
-		return array_keys($productIds);
+		return $productCategories;
+	}
+
+	/**
+	 * List ids of Dolibarr products that belong to the configured root category
+	 * (AUVOSHOPWARE_CATEGORY_ID) or one of its subcategories, excluding variant children.
+	 *
+	 * @return int[]
+	 */
+	public function getSyncableProductIds()
+	{
+		return array_keys($this->getSyncableProductCategoryMap());
 	}
 
 	/**
@@ -149,6 +175,77 @@ class ShopwareProductSync
 	public function productUuid($ref)
 	{
 		return md5('auvoshopware-product-'.$ref);
+	}
+
+	/**
+	 * Deterministic id for a Shopware category mirroring a Dolibarr category, keyed by the
+	 * Dolibarr category id. Same reasoning as productUuid() - no mapping table needed, unlike
+	 * auvopresta's PrestaShop category mirroring which had to look up/store serial ids.
+	 *
+	 * @param int $dolCategoryId
+	 * @return string
+	 */
+	protected function categoryUuid($dolCategoryId)
+	{
+		return md5('auvoshopware-category-'.$dolCategoryId);
+	}
+
+	/**
+	 * Shopware category id a Dolibarr category maps to. The configured root category
+	 * (AUVOSHOPWARE_CATEGORY_ID) itself is not mirrored - it maps directly to the configured
+	 * Shopware parent category (AUVOSHOPWARE_SW_PARENT_CATEGORY_ID); only its descendants get
+	 * mirrored underneath that parent. Same design as auvopresta's getOrCreatePsCategoryId().
+	 *
+	 * @param int $dolCategoryId
+	 * @return string
+	 */
+	protected function shopwareCategoryId($dolCategoryId)
+	{
+		$rootId = getDolGlobalInt('AUVOSHOPWARE_CATEGORY_ID');
+		if ((int) $dolCategoryId === (int) $rootId) {
+			return getDolGlobalString('AUVOSHOPWARE_SW_PARENT_CATEGORY_ID');
+		}
+
+		return $this->categoryUuid($dolCategoryId);
+	}
+
+	/**
+	 * Build upsert payloads for every in-scope Dolibarr category that needs mirroring into
+	 * Shopware (everything except the root itself, see shopwareCategoryId()), in
+	 * parent-before-child order so one Sync API request can create the whole chain in one go -
+	 * same reasoning as pushVariants()'s property_group-before-property_group_option ordering.
+	 * Empty if AUVOSHOPWARE_SW_PARENT_CATEGORY_ID isn't configured (nothing to attach the
+	 * mirrored tree to).
+	 *
+	 * @return array<int, array{id: string, name: string, parentId: string}>
+	 */
+	protected function buildCategoryOperations()
+	{
+		if (empty(getDolGlobalString('AUVOSHOPWARE_SW_PARENT_CATEGORY_ID'))) {
+			return array();
+		}
+
+		$rootId = getDolGlobalInt('AUVOSHOPWARE_CATEGORY_ID');
+		$operations = array();
+
+		foreach ($this->getInScopeCategoryParents() as $categId => $parentId) {
+			if ((int) $categId === (int) $rootId) {
+				continue;
+			}
+
+			$categ = new Categorie($this->db);
+			if ($categ->fetch($categId) <= 0) {
+				continue;
+			}
+
+			$operations[] = array(
+				'id' => $this->categoryUuid($categId),
+				'name' => $categ->label,
+				'parentId' => $this->shopwareCategoryId($parentId),
+			);
+		}
+
+		return $operations;
 	}
 
 	/**
@@ -602,9 +699,10 @@ class ShopwareProductSync
 	 * @param Product     $product
 	 * @param array{associations: array<int, array{id: string, mediaId: string, position: int}>, coverId: ?string} $mediaResult
 	 * @param string|null $manufacturerId Already-resolved Shopware product_manufacturer id (see ensureManufacturer())
+	 * @param int[]       $dolCategoryIds In-scope Dolibarr category ids this product is directly assigned to
 	 * @return array<string, mixed>
 	 */
-	public function buildProductPayload(Product $product, array $mediaResult = array(), $manufacturerId = null)
+	public function buildProductPayload(Product $product, array $mediaResult = array(), $manufacturerId = null, array $dolCategoryIds = array())
 	{
 		$payload = array(
 			'id' => $this->productUuid($product->ref),
@@ -658,6 +756,12 @@ class ShopwareProductSync
 			}
 		}
 
+		if (!empty($dolCategoryIds) && !empty(getDolGlobalString('AUVOSHOPWARE_SW_PARENT_CATEGORY_ID'))) {
+			$payload['categories'] = array_map(function ($dolCategoryId) {
+				return array('id' => $this->shopwareCategoryId($dolCategoryId));
+			}, $dolCategoryIds);
+		}
+
 		return $payload;
 	}
 
@@ -666,9 +770,10 @@ class ShopwareProductSync
 	 * so unchanged products can be skipped on repeat syncAll() runs.
 	 *
 	 * @param Product $product
+	 * @param int[]   $dolCategoryIds
 	 * @return string
 	 */
-	protected function computeContentHash(Product $product)
+	protected function computeContentHash(Product $product, array $dolCategoryIds = array())
 	{
 		$imageSignature = array();
 		foreach ($this->getProductImageFiles($product) as $file) {
@@ -694,6 +799,8 @@ class ShopwareProductSync
 		}
 		sort($variantSignature);
 
+		sort($dolCategoryIds);
+
 		$data = implode('|', array(
 			$product->ref,
 			$product->label,
@@ -708,6 +815,7 @@ class ShopwareProductSync
 			(string) $this->getManufacturerName($product),
 			(string) $this->getSupplierBuyPrice($product),
 			implode(',', $variantSignature),
+			implode(',', $dolCategoryIds),
 		));
 
 		return md5($data);
@@ -716,19 +824,28 @@ class ShopwareProductSync
 	/**
 	 * Sync a single product to Shopware.
 	 *
-	 * @param int  $productId
-	 * @param bool $force Skip the content-hash unchanged check
+	 * @param int        $productId
+	 * @param int[]|null $dolCategoryIds In-scope Dolibarr category ids this product is directly
+	 *                                   assigned to; computed automatically if not given (pass
+	 *                                   it when calling this in a loop over many products to
+	 *                                   avoid recomputing the whole category map every time)
+	 * @param bool       $force          Skip the content-hash unchanged check
 	 * @return array{status: string, sw_product_id?: string, error?: string}
 	 */
-	public function syncOne($productId, $force = false)
+	public function syncOne($productId, ?array $dolCategoryIds = null, $force = false)
 	{
 		$product = new Product($this->db);
 		if ($product->fetch($productId) <= 0) {
 			return array('status' => 'error', 'error' => 'Product not found: '.$productId);
 		}
 
+		if ($dolCategoryIds === null) {
+			$categoryMap = $this->getSyncableProductCategoryMap();
+			$dolCategoryIds = $categoryMap[$productId] ?? array();
+		}
+
 		$swProductId = $this->productUuid($product->ref);
-		$contentHash = $this->computeContentHash($product);
+		$contentHash = $this->computeContentHash($product, $dolCategoryIds);
 
 		if (!$force) {
 			$map = $this->getMapRow($product->id);
@@ -753,16 +870,25 @@ class ShopwareProductSync
 		}
 
 		$variantResult = $this->pushVariants($product);
+		$categoryOperations = $this->buildCategoryOperations();
 
-		$parentPayload = $this->buildProductPayload($product, $mediaResult, $manufacturerId);
+		$parentPayload = $this->buildProductPayload($product, $mediaResult, $manufacturerId, $dolCategoryIds);
 		if (!empty($variantResult['configuratorSettings'])) {
 			$parentPayload['configuratorSettings'] = $variantResult['configuratorSettings'];
 		}
 
-		// Property groups/options must be upserted before the product(s) that reference them as
-		// foreign keys - the Sync API processes operations of one request in the given order, so
-		// all three go out together as a single request rather than one call per step.
+		// Categories and property groups/options must be upserted before the product(s) that
+		// reference them as foreign keys - the Sync API processes operations of one request in
+		// the given order, so everything goes out together as a single request rather than one
+		// call per step.
 		$operations = array();
+		if (!empty($categoryOperations)) {
+			$operations['upsert-categories'] = array(
+				'entity' => 'category',
+				'action' => 'upsert',
+				'payload' => $categoryOperations,
+			);
+		}
 		if (!empty($variantResult['propertyGroups'])) {
 			$operations['upsert-property-groups'] = array(
 				'entity' => 'property_group',
@@ -809,9 +935,9 @@ class ShopwareProductSync
 	 * Sync every product currently in scope (configured category + subcategories). Products
 	 * unchanged since their last successful sync are skipped (see syncOne()/computeContentHash()).
 	 *
-	 * First cut: one Sync API call per product, same as syncOne(). True batching (multiple
-	 * products in a single Sync API request, per PLAN.md's "bulk-first" principle) is a
-	 * follow-up once this per-product shape is confirmed working live.
+	 * One Sync API call per product (properties/categories/variants/media all bundled into that
+	 * same request, see syncOne()). Batching multiple *products* together into one request too
+	 * is a possible follow-up, not needed so far - even a 154-variant product syncs fast today.
 	 *
 	 * @return array{ok:int, error:int, skipped:int, details:array<int,array>}
 	 */
@@ -819,8 +945,8 @@ class ShopwareProductSync
 	{
 		$summary = array('ok' => 0, 'error' => 0, 'skipped' => 0, 'details' => array());
 
-		foreach ($this->getSyncableProductIds() as $productId) {
-			$result = $this->syncOne($productId);
+		foreach ($this->getSyncableProductCategoryMap() as $productId => $dolCategoryIds) {
+			$result = $this->syncOne($productId, $dolCategoryIds);
 			$bucket = in_array($result['status'], array('ok', 'skipped'), true) ? $result['status'] : 'error';
 			$summary[$bucket]++;
 			$summary['details'][$productId] = $result;
