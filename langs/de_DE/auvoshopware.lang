@@ -81,3 +81,7 @@ AuVoShopwarePushOrderStatus = Status an Shopware melden
 AuVoShopwarePushOrderStatusOk = Bestellstatus erfolgreich an Shopware übertragen
 AuVoShopwarePushOrderStatusSkipped = Nichts zu übertragen (kein zugeordneter Shopware-Status oder Shopware-Bestellung ist bereits in diesem Status)
 AuVoShopwarePushOrderStatusError = Übertragung des Bestellstatus fehlgeschlagen: %s
+AuVoShopwarePushInvoices = Rechnung an Shopware senden
+AuVoShopwarePushInvoicesOk = %s Rechnung(en) erfolgreich an Shopware übertragen
+AuVoShopwarePushInvoicesSkipped = Keine mit diesem Auftrag verknüpfte Rechnung gefunden
+AuVoShopwarePushInvoicesError = Übertragung der Rechnung fehlgeschlagen: %s

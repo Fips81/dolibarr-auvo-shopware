@@ -68,6 +68,7 @@ require_once DOL_DOCUMENT_ROOT.'/commande/class/commande.class.php';
 require_once __DIR__.'/class/ShopwareClient.class.php';
 require_once __DIR__.'/class/ShopwareProductSync.class.php';
 require_once __DIR__.'/class/ShopwareOrderSync.class.php';
+require_once __DIR__.'/class/ShopwareInvoiceSync.class.php';
 
 // Load translation files required by the page
 $langs->loadLangs(array("orders", "auvoshopware@auvoshopware"));
@@ -90,6 +91,7 @@ $swClient = new ShopwareClient(
 
 $sync = new ShopwareProductSync($db, $swClient);
 $orderSync = new ShopwareOrderSync($db, $user, $swClient);
+$invoiceSync = new ShopwareInvoiceSync($db, $swClient);
 
 $isConfigured = getDolGlobalString('AUVOSHOPWARE_SW_URL')
 	&& getDolGlobalString('AUVOSHOPWARE_SW_CLIENT_ID')
@@ -101,7 +103,7 @@ $isConfigured = getDolGlobalString('AUVOSHOPWARE_SW_URL')
  * Actions
  */
 
-if (in_array($action, array('syncall', 'syncone', 'fetchorders'), true) && function_exists('set_time_limit')
+if (in_array($action, array('syncall', 'syncone', 'fetchorders', 'pushinvoices'), true) && function_exists('set_time_limit')
 	&& stripos((string) ini_get('disable_functions'), 'set_time_limit') === false) {
 	// A large catalog can need minutes of sequential Sync API round trips - well past a typical
 	// web request's default execution time limit (see PLAN.md: this is exactly what crashed
@@ -156,6 +158,18 @@ if ($action == 'syncall' && $isConfigured) {
 		setEventMessages($langs->trans('AuVoShopwarePushOrderStatusSkipped'), null, 'warnings');
 	} else {
 		setEventMessages($langs->trans('AuVoShopwarePushOrderStatusError', $result['error']), null, 'errors');
+	}
+} elseif ($action == 'pushinvoices' && $commandeId > 0 && $isConfigured) {
+	if (!$canSync) {
+		accessforbidden();
+	}
+	$result = $invoiceSync->pushInvoices($commandeId);
+	if ($result['status'] == 'ok') {
+		setEventMessages($langs->trans('AuVoShopwarePushInvoicesOk', $result['count']), null, 'mesgs');
+	} elseif ($result['status'] == 'skipped') {
+		setEventMessages($langs->trans('AuVoShopwarePushInvoicesSkipped'), null, 'warnings');
+	} else {
+		setEventMessages($langs->trans('AuVoShopwarePushInvoicesError', $result['error']), null, 'errors');
 	}
 }
 
@@ -274,7 +288,8 @@ if (!$isConfigured) {
 		print '</td>';
 		print '<td class="right">';
 		if ($canSync && $commandeLoaded) {
-			print '<a class="button_small" href="'.$_SERVER["PHP_SELF"].'?action=pushorderstatus&commandeid='.$commande->id.'&token='.newToken().'">'.$langs->trans("AuVoShopwarePushOrderStatus").'</a>';
+			print '<a class="button_small" href="'.$_SERVER["PHP_SELF"].'?action=pushorderstatus&commandeid='.$commande->id.'&token='.newToken().'">'.$langs->trans("AuVoShopwarePushOrderStatus").'</a> ';
+			print '<a class="button_small" href="'.$_SERVER["PHP_SELF"].'?action=pushinvoices&commandeid='.$commande->id.'&token='.newToken().'">'.$langs->trans("AuVoShopwarePushInvoices").'</a>';
 		}
 		print '</td>';
 		print '</tr>';

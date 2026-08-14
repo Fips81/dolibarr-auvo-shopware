@@ -246,6 +246,31 @@ class ShopwareClient
 	}
 
 	/**
+	 * Find a document_type's id by its technical name (e.g. 'invoice') - needed as the
+	 * 'documentTypeId' foreign key when upserting a 'document' entity, and not something we can
+	 * derive deterministically like our own product/category ids since document types are
+	 * Shopware-defined, not ours.
+	 *
+	 * @param string $technicalName
+	 * @return string|null Null if not found or on error (see $this->error)
+	 */
+	public function findDocumentTypeId($technicalName)
+	{
+		$result = $this->search('document-type', array(
+			'filter' => array(
+				array('type' => 'equals', 'field' => 'technicalName', 'value' => $technicalName),
+			),
+			'limit' => 1,
+		));
+
+		if (!is_array($result) || empty($result['data'][0]['id'])) {
+			return null;
+		}
+
+		return $result['data'][0]['id'];
+	}
+
+	/**
 	 * Check that the configured shop URL and credentials work: fetches the OAuth2 token and
 	 * does one lightweight, always-available read (a single product, if any exist).
 	 *

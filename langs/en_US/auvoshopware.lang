@@ -81,3 +81,7 @@ AuVoShopwarePushOrderStatus = Push status to Shopware
 AuVoShopwarePushOrderStatusOk = Order status pushed to Shopware successfully
 AuVoShopwarePushOrderStatusSkipped = Nothing to push (no mapped Shopware status, or the Shopware order is already in that status)
 AuVoShopwarePushOrderStatusError = Failed to push order status: %s
+AuVoShopwarePushInvoices = Send invoice to Shopware
+AuVoShopwarePushInvoicesOk = %s invoice(s) pushed to Shopware successfully
+AuVoShopwarePushInvoicesSkipped = No invoice linked to this order
+AuVoShopwarePushInvoicesError = Failed to push invoice: %s
