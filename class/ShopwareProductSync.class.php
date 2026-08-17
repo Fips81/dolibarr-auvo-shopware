@@ -874,6 +874,70 @@ class ShopwareProductSync
 	}
 
 	/**
+	 * True if this product's sw_images map still lists a filename no longer found on disk - i.e.
+	 * pushImages() has stale Shopware media to clean up on its next run. Deleting the file's the
+	 * only trace of the change on the Dolibarr side: it doesn't touch price/stock/description, so
+	 * computeContentHash() alone can't tell syncOne()'s skip-if-unchanged check that a real sync
+	 * (not a skip) is still needed once the map and the on-disk files no longer match (e.g. an
+	 * image removed before this cleanup existed, whose absence is already baked into the last
+	 * saved content_hash from a sync that ran after the deletion but before pushImages() knew to
+	 * clean the map).
+	 *
+	 * @param Product $product
+	 * @return bool
+	 */
+	protected function mapHasStaleImages(Product $product)
+	{
+		$map = $this->getMapRow($product->id);
+		if (empty($map['sw_images'])) {
+			return false;
+		}
+
+		$decoded = json_decode($map['sw_images'], true);
+		if (!is_array($decoded) || empty($decoded)) {
+			return false;
+		}
+
+		$currentFilenames = array();
+		foreach ($this->getProductImageFiles($product) as $file) {
+			if (!empty($file['name'])) {
+				$currentFilenames[$file['name']] = true;
+			}
+		}
+
+		foreach (array_keys($decoded) as $filename) {
+			if (!isset($currentFilenames[$filename])) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * mapHasStaleImages() for the product itself and every variant child - each has its own
+	 * ref-named image directory and its own sw_images map row (see pushImages()).
+	 *
+	 * @param Product $product
+	 * @return bool
+	 */
+	protected function hasStaleImagesAnywhere(Product $product)
+	{
+		if ($this->mapHasStaleImages($product)) {
+			return true;
+		}
+
+		foreach ($this->getParentCombinations($product) as $combination) {
+			$child = new Product($this->db);
+			if ($child->fetch($combination->fk_product_child) > 0 && $this->mapHasStaleImages($child)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * Build a hash of everything that would change what gets pushed to Shopware for a product,
 	 * so unchanged products can be skipped on repeat syncAll() runs.
 	 *
@@ -958,7 +1022,7 @@ class ShopwareProductSync
 
 		if (!$force) {
 			$map = $this->getMapRow($product->id);
-			if ($map !== null && $map['last_sync_status'] === 'ok' && $map['content_hash'] === $contentHash) {
+			if ($map !== null && $map['last_sync_status'] === 'ok' && $map['content_hash'] === $contentHash && !$this->hasStaleImagesAnywhere($product)) {
 				return array('status' => 'skipped', 'sw_product_id' => $swProductId);
 			}
 		}
