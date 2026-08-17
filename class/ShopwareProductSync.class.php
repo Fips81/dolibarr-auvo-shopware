@@ -655,14 +655,20 @@ class ShopwareProductSync
 
 	/**
 	 * Upload any product image files not yet known to Shopware (per the local sw_images map),
-	 * and return the "media" association list + cover id to merge into the product payload.
-	 * Works the same for the main product and for a variant child - each is just a Dolibarr
-	 * Product with its own ref-named image directory and its own row in the mapping table.
+	 * remove any that were deleted on the Dolibarr side since the last sync, and return the
+	 * "media" association list + cover id to merge into the product payload. Works the same for
+	 * the main product and for a variant child - each is just a Dolibarr Product with its own
+	 * ref-named image directory and its own row in the mapping table.
 	 *
 	 * Two Admin API calls per new image, both outside the main product Sync API call: (1)
 	 * sync()-upsert an empty 'media' entity with a deterministic id, (2) upload the raw file
 	 * bytes into it (ShopwareClient::uploadMediaFile()). Both must happen before the product
 	 * upsert that references the media id as a foreign key.
+	 *
+	 * Deletions go the other way: a filename present in the sw_images map but no longer found on
+	 * disk means the image was removed in Dolibarr, so both its product_media join row and its
+	 * underlying media entity are deleted via one Sync API call - both use deterministic ids, so
+	 * no lookup is needed to find them.
 	 *
 	 * @param Product $product
 	 * @return array{associations: array<int, array{id: string, mediaId: string, position: int}>, coverId: ?string, images: array<string, string>, error: ?string}
@@ -671,9 +677,6 @@ class ShopwareProductSync
 	{
 		$productDir = $this->getProductDir($product);
 		$files = $this->getProductImageFiles($product);
-		if (empty($files)) {
-			return array('associations' => array(), 'coverId' => null, 'images' => array(), 'error' => null);
-		}
 		sort($files);
 
 		$map = $this->getMapRow($product->id);
@@ -686,6 +689,44 @@ class ShopwareProductSync
 		}
 
 		$errors = array();
+
+		$currentFilenames = array();
+		foreach ($files as $file) {
+			if (!empty($file['name'])) {
+				$currentFilenames[$file['name']] = true;
+			}
+		}
+
+		$staleFilenames = array_diff(array_keys($existingImages), array_keys($currentFilenames));
+		if (!empty($staleFilenames)) {
+			$deleteAssociationPayload = array();
+			$deleteMediaPayload = array();
+			foreach ($staleFilenames as $filename) {
+				$deleteAssociationPayload[] = array('id' => $this->productMediaUuid($product->ref, $filename));
+				$deleteMediaPayload[] = array('id' => $existingImages[$filename]);
+			}
+
+			$deleteResult = $this->client->sync(array(
+				'delete-product-media' => array(
+					'entity' => 'product_media',
+					'action' => 'delete',
+					'payload' => $deleteAssociationPayload,
+				),
+				'delete-media' => array(
+					'entity' => 'media',
+					'action' => 'delete',
+					'payload' => $deleteMediaPayload,
+				),
+			));
+			if ($deleteResult === false) {
+				$errors[] = 'delete '.implode(', ', $staleFilenames).': '.$this->client->error;
+			} else {
+				foreach ($staleFilenames as $filename) {
+					unset($existingImages[$filename]);
+				}
+			}
+		}
+
 		foreach ($files as $file) {
 			$filename = $file['name'] ?? null;
 			if (empty($filename) || isset($existingImages[$filename])) {
