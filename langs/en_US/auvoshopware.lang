@@ -54,7 +54,7 @@ AuVoShopwareAboutPage = AuVoShopware about page
 #
 # Dashboard / sync page
 #
-AuVoShopwareArea = Shopware sync
+AuVoShopwareArea = AuVoShopware
 AuVoShopwareNotConfigured = The Shopware connection is not fully configured yet. Please complete the <a href="%s">module setup</a> first.
 AuVoShopwareSyncCronLabel = Sync with Shopware
 AuVoShopwareSyncCronComment = Runs AuVoShopware's product and order sync. Disabled by default until the connection and sync scope have been reviewed in the setup page.

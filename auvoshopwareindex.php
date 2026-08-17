@@ -234,7 +234,7 @@ if (!$isConfigured) {
 		print '</td>';
 		print '<td class="right">';
 		if ($canSync) {
-			print '<a class="button_small" href="'.$_SERVER["PHP_SELF"].'?action=syncone&id='.$product->id.'&token='.newToken().'">'.$langs->trans("AuVoShopwareSyncOne").'</a>';
+			print '<a class="button_small classfortooltip" href="'.$_SERVER["PHP_SELF"].'?action=syncone&id='.$product->id.'&token='.newToken().'" title="'.dol_escape_htmltag($langs->trans("AuVoShopwareSyncOne")).'">'.img_picto('', 'refresh', 'class="pictofixedwidth"').'</a>';
 		}
 		print '</td>';
 		print '</tr>';
@@ -288,8 +288,8 @@ if (!$isConfigured) {
 		print '</td>';
 		print '<td class="right">';
 		if ($canSync && $commandeLoaded) {
-			print '<a class="button_small" href="'.$_SERVER["PHP_SELF"].'?action=pushorderstatus&commandeid='.$commande->id.'&token='.newToken().'">'.$langs->trans("AuVoShopwarePushOrderStatus").'</a> ';
-			print '<a class="button_small" href="'.$_SERVER["PHP_SELF"].'?action=pushinvoices&commandeid='.$commande->id.'&token='.newToken().'">'.$langs->trans("AuVoShopwarePushInvoices").'</a>';
+			print '<a class="button_small classfortooltip" href="'.$_SERVER["PHP_SELF"].'?action=pushorderstatus&commandeid='.$commande->id.'&token='.newToken().'" title="'.dol_escape_htmltag($langs->trans("AuVoShopwarePushOrderStatus")).'">'.img_picto('', 'refresh', 'class="pictofixedwidth"').'</a> ';
+			print '<a class="button_small classfortooltip" href="'.$_SERVER["PHP_SELF"].'?action=pushinvoices&commandeid='.$commande->id.'&token='.newToken().'" title="'.dol_escape_htmltag($langs->trans("AuVoShopwarePushInvoices")).'">'.img_picto('', 'bill', 'class="pictofixedwidth"').'</a>';
 		}
 		print '</td>';
 		print '</tr>';
