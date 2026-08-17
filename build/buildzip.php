@@ -60,7 +60,8 @@ $listOfModuleContent = [
 $exclude_list = [
 	'/^.git$/',
 	'/.*js.map/',
-	'/DEV.md/'
+	'/DEV.md/',
+	'/PLAN.md/'
 ];
 
 // ============================================= end of configuration
