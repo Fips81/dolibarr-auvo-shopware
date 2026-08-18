@@ -344,6 +344,114 @@ class ShopwareProductSync
 	}
 
 	/**
+	 * Material properties HTML from the product's "materialeigenschaften" extrafield, or null if
+	 * empty/not set. Pushed to Shopware as a custom field (see ensureMaterialPropertiesCustomField())
+	 * rather than a native product field - Shopware has no built-in second description, so a
+	 * storefront tab for this needs separate theme work; the sync only carries the data across.
+	 *
+	 * @param Product $product
+	 * @return string|null
+	 */
+	protected function getMaterialProperties(Product $product)
+	{
+		if (!is_array($product->array_options) || $product->array_options === array()) {
+			$product->fetch_optionals();
+		}
+
+		$value = trim((string) ($product->array_options['options_materialeigenschaften'] ?? ''));
+
+		return $value !== '' ? $value : null;
+	}
+
+	/**
+	 * Deterministic id for the custom_field_set that groups our custom fields on the Shopware
+	 * product entity (currently just "materialeigenschaften"). Same "pick our own id, no mapping
+	 * table needed" reasoning as productUuid().
+	 *
+	 * @return string
+	 */
+	protected function materialPropertiesFieldSetUuid()
+	{
+		return md5('auvoshopware-materialeigenschaften-fieldset');
+	}
+
+	/**
+	 * Deterministic id for the custom_field_set_relation that attaches materialPropertiesFieldSetUuid()
+	 * to the 'product' entity - without this relation the field set exists but Shopware never shows
+	 * or accepts it for products.
+	 *
+	 * @return string
+	 */
+	protected function materialPropertiesFieldSetRelationUuid()
+	{
+		return md5('auvoshopware-materialeigenschaften-fieldset-relation');
+	}
+
+	/**
+	 * Deterministic id for the custom_field itself (technical name "materialeigenschaften", type
+	 * 'html' - same rich-text editor Shopware uses for its own fields).
+	 *
+	 * @return string
+	 */
+	protected function materialPropertiesFieldUuid()
+	{
+		return md5('auvoshopware-materialeigenschaften-field');
+	}
+
+	/**
+	 * Sync API operations that ensure the "materialeigenschaften" custom_field (+ its set and the
+	 * relation attaching that set to 'product') exist in Shopware. Idempotent upserts with
+	 * deterministic ids, so - like buildCategoryOperations() - it's cheap enough to include in
+	 * every syncOne() request rather than tracking whether it was already created.
+	 *
+	 * @return array<string, array{entity: string, action: string, payload: array<int, array<string, mixed>>}>
+	 */
+	protected function buildMaterialPropertiesCustomFieldOperations()
+	{
+		$label = array('de-DE' => 'Materialeigenschaften', 'en-GB' => 'Material properties');
+
+		return array(
+			'upsert-materialeigenschaften-fieldset' => array(
+				'entity' => 'custom_field_set',
+				'action' => 'upsert',
+				'payload' => array(array(
+					'id' => $this->materialPropertiesFieldSetUuid(),
+					'name' => 'auvoshopware_materialeigenschaften',
+					'config' => array('label' => $label),
+					'active' => true,
+				)),
+			),
+			'upsert-materialeigenschaften-fieldset-relation' => array(
+				'entity' => 'custom_field_set_relation',
+				'action' => 'upsert',
+				'payload' => array(array(
+					'id' => $this->materialPropertiesFieldSetRelationUuid(),
+					'customFieldSetId' => $this->materialPropertiesFieldSetUuid(),
+					'entityName' => 'product',
+				)),
+			),
+			'upsert-materialeigenschaften-field' => array(
+				'entity' => 'custom_field',
+				'action' => 'upsert',
+				'payload' => array(array(
+					'id' => $this->materialPropertiesFieldUuid(),
+					'name' => 'materialeigenschaften',
+					'customFieldSetId' => $this->materialPropertiesFieldSetUuid(),
+					'type' => 'html',
+					'config' => array(
+						'label' => $label,
+						'customFieldType' => 'html',
+						'customFieldPosition' => 1,
+						'componentName' => 'sw-text-editor',
+						'type' => 'text',
+					),
+					'active' => true,
+				)),
+			),
+		);
+	}
+
+	/**
 	 * Ensure a Shopware product_manufacturer entity exists for the given name, and return its id.
 	 *
 	 * @param string $name
@@ -870,6 +978,11 @@ class ShopwareProductSync
 			}, $dolCategoryIds);
 		}
 
+		// Always sent, even when null - otherwise clearing the field in Dolibarr would never
+		// clear the stale value already pushed to Shopware (same class of bug as pushImages()
+		// not cleaning up images removed on the Dolibarr side, see mapHasStaleImages()).
+		$payload['customFields'] = array('materialeigenschaften' => $this->getMaterialProperties($product));
+
 		return $payload;
 	}
 
@@ -987,6 +1100,7 @@ class ShopwareProductSync
 			(string) $this->getManufacturerName($product),
 			(string) $this->getSupplierBuyPrice($product),
 			(string) $this->getManufacturerUvpGross($product),
+			(string) $this->getMaterialProperties($product),
 			implode(',', $variantSignature),
 			implode(',', $dolCategoryIds),
 		));
@@ -1054,7 +1168,7 @@ class ShopwareProductSync
 		// reference them as foreign keys - the Sync API processes operations of one request in
 		// the given order, so everything goes out together as a single request rather than one
 		// call per step.
-		$operations = array();
+		$operations = $this->buildMaterialPropertiesCustomFieldOperations();
 		if (!empty($categoryOperations)) {
 			$operations['upsert-categories'] = array(
 				'entity' => 'category',
