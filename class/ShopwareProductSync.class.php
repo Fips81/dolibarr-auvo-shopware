@@ -364,6 +364,25 @@ class ShopwareProductSync
 	}
 
 	/**
+	 * Print details HTML from the product's "druckdetails" extrafield, or null if empty/not set.
+	 * Pushed to Shopware as a custom field (see buildPrintDetailsCustomFieldOperations()), same
+	 * reasoning as getMaterialProperties().
+	 *
+	 * @param Product $product
+	 * @return string|null
+	 */
+	protected function getPrintDetails(Product $product)
+	{
+		if (!is_array($product->array_options) || $product->array_options === array()) {
+			$product->fetch_optionals();
+		}
+
+		$value = trim((string) ($product->array_options['options_druckdetails'] ?? ''));
+
+		return $value !== '' ? $value : null;
+	}
+
+	/**
 	 * Deterministic id for the custom_field_set that groups our custom fields on the Shopware
 	 * product entity (currently just "materialeigenschaften"). Same "pick our own id, no mapping
 	 * table needed" reasoning as productUuid().
@@ -437,6 +456,91 @@ class ShopwareProductSync
 					'id' => $this->materialPropertiesFieldUuid(),
 					'name' => 'materialeigenschaften',
 					'customFieldSetId' => $this->materialPropertiesFieldSetUuid(),
+					'type' => 'html',
+					'config' => array(
+						'label' => $label,
+						'customFieldType' => 'html',
+						'customFieldPosition' => 1,
+						'componentName' => 'sw-text-editor',
+						'type' => 'text',
+					),
+					'active' => true,
+				)),
+			),
+		);
+	}
+
+	/**
+	 * Deterministic id for the custom_field_set that groups our print-details custom field on the
+	 * Shopware product entity ("druckdetails"). Same reasoning as materialPropertiesFieldSetUuid().
+	 *
+	 * @return string
+	 */
+	protected function printDetailsFieldSetUuid()
+	{
+		return md5('auvoshopware-druckdetails-fieldset');
+	}
+
+	/**
+	 * Deterministic id for the custom_field_set_relation that attaches printDetailsFieldSetUuid()
+	 * to the 'product' entity.
+	 *
+	 * @return string
+	 */
+	protected function printDetailsFieldSetRelationUuid()
+	{
+		return md5('auvoshopware-druckdetails-fieldset-relation');
+	}
+
+	/**
+	 * Deterministic id for the custom_field itself (technical name "druckdetails", type 'html').
+	 *
+	 * @return string
+	 */
+	protected function printDetailsFieldUuid()
+	{
+		return md5('auvoshopware-druckdetails-field');
+	}
+
+	/**
+	 * Sync API operations that ensure the "druckdetails" custom_field (+ its set and the relation
+	 * attaching that set to 'product') exist in Shopware. Same reasoning as
+	 * buildMaterialPropertiesCustomFieldOperations() - idempotent upserts with deterministic ids,
+	 * cheap enough to include in every syncOne() request.
+	 *
+	 * @return array<string, array{entity: string, action: string, payload: array<int, array<string, mixed>>}>
+	 */
+	protected function buildPrintDetailsCustomFieldOperations()
+	{
+		$label = array('de-DE' => 'Druckdetails', 'en-GB' => 'Print details');
+
+		return array(
+			'upsert-druckdetails-fieldset' => array(
+				'entity' => 'custom_field_set',
+				'action' => 'upsert',
+				'payload' => array(array(
+					'id' => $this->printDetailsFieldSetUuid(),
+					'name' => 'auvoshopware_druckdetails',
+					'config' => array('label' => $label),
+					'active' => true,
+				)),
+			),
+			'upsert-druckdetails-fieldset-relation' => array(
+				'entity' => 'custom_field_set_relation',
+				'action' => 'upsert',
+				'payload' => array(array(
+					'id' => $this->printDetailsFieldSetRelationUuid(),
+					'customFieldSetId' => $this->printDetailsFieldSetUuid(),
+					'entityName' => 'product',
+				)),
+			),
+			'upsert-druckdetails-field' => array(
+				'entity' => 'custom_field',
+				'action' => 'upsert',
+				'payload' => array(array(
+					'id' => $this->printDetailsFieldUuid(),
+					'name' => 'druckdetails',
+					'customFieldSetId' => $this->printDetailsFieldSetUuid(),
 					'type' => 'html',
 					'config' => array(
 						'label' => $label,
@@ -981,7 +1085,10 @@ class ShopwareProductSync
 		// Always sent, even when null - otherwise clearing the field in Dolibarr would never
 		// clear the stale value already pushed to Shopware (same class of bug as pushImages()
 		// not cleaning up images removed on the Dolibarr side, see mapHasStaleImages()).
-		$payload['customFields'] = array('materialeigenschaften' => $this->getMaterialProperties($product));
+		$payload['customFields'] = array(
+			'materialeigenschaften' => $this->getMaterialProperties($product),
+			'druckdetails' => $this->getPrintDetails($product),
+		);
 
 		return $payload;
 	}
@@ -1101,6 +1208,7 @@ class ShopwareProductSync
 			(string) $this->getSupplierBuyPrice($product),
 			(string) $this->getManufacturerUvpGross($product),
 			(string) $this->getMaterialProperties($product),
+			(string) $this->getPrintDetails($product),
 			implode(',', $variantSignature),
 			implode(',', $dolCategoryIds),
 		));
@@ -1168,7 +1276,10 @@ class ShopwareProductSync
 		// reference them as foreign keys - the Sync API processes operations of one request in
 		// the given order, so everything goes out together as a single request rather than one
 		// call per step.
-		$operations = $this->buildMaterialPropertiesCustomFieldOperations();
+		$operations = array_merge(
+			$this->buildMaterialPropertiesCustomFieldOperations(),
+			$this->buildPrintDetailsCustomFieldOperations()
+		);
 		if (!empty($categoryOperations)) {
 			$operations['upsert-categories'] = array(
 				'entity' => 'category',
