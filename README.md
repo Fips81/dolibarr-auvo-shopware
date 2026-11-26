@@ -1,5 +1,7 @@
 # AuVo Shopware
 
+[![Neueste Version](https://img.shields.io/github/v/release/Fips81/dolibarr-auvo-shopware?label=version&sort=semver)](https://github.com/Fips81/dolibarr-auvo-shopware/releases/latest)
+
 **Dolibarr mit einem Shopware-6-Shop verbinden.** Das Modul überträgt Artikel
 aus Dolibarr in den Shop, holt Bestellungen als Aufträge nach Dolibarr und
 meldet Status und Rechnung an Shopware zurück. Dolibarr bleibt dabei das
@@ -37,16 +39,19 @@ Die Rechnung, die im Shop landet, ist dann eine ZUGFeRD-Rechnung.
 
 ## Installation
 
-1. Den Ordner `auvoshopware/` nach `htdocs/custom/` kopieren (Besitzer:
-   Webserver-Benutzer, z. B. `www-data`) oder das Modul-ZIP in Dolibarr unter
-   *Einstellungen → Module → Externes Modul hochladen* hochladen.
-2. Unter *Einstellungen → Module* **AuVo Shopware** aktivieren und den
+1. `module_auvoshopware-X.Y.Z.zip` aus den
+   [Releases](https://github.com/Fips81/dolibarr-auvo-shopware/releases)
+   herunterladen.
+2. Entpacken und den Ordner `auvoshopware/` nach `htdocs/custom/` kopieren
+   (Besitzer: Webserver-Benutzer, z. B. `www-data`). Alternativ in Dolibarr
+   unter *Einstellungen → Module → Externes Modul hochladen*.
+3. Unter *Einstellungen → Module* **AuVo Shopware** aktivieren und den
    Benutzern die Rechte „View the Shopware sync dashboard“ (Übersicht ansehen)
    bzw. „Trigger Shopware synchronization“ (Sync auslösen) geben.
-3. In Shopware unter *Einstellungen → System → Integrationen* eine neue
+4. In Shopware unter *Einstellungen → System → Integrationen* eine neue
    Integration mit Administratorrechten anlegen und Zugangs-ID und
    Sicherheitsschlüssel notieren.
-4. In den Moduleinstellungen eintragen:
+5. In den Moduleinstellungen eintragen:
    - Shop-URL, Client-ID und Client-Secret, dann **Verbindung testen**
    - Quellkategorie in Dolibarr: Nur Artikel in dieser Kategorie und ihren
      Unterkategorien werden übertragen.
@@ -58,8 +63,9 @@ Die Rechnung, die im Shop landet, ist dann eine ZUGFeRD-Rechnung.
 Danach gibt es im Hauptmenü den Eintrag **AuVo Shopware** mit Artikelliste,
 Sync-Buttons und den importierten Bestellungen.
 
-**Update:** Ordner `custom/auvoshopware` durch den neuen ersetzen, dann das
-Modul einmal deaktivieren und wieder aktivieren. Einstellungen und
+**Update:** Ordner `custom/auvoshopware` durch den neuen ersetzen (alten
+Ordner vorher **außerhalb** von `custom/` sichern, sonst lädt Dolibarr beide),
+dann das Modul einmal deaktivieren und wieder aktivieren. Einstellungen und
 Zuordnungen bleiben dabei erhalten.
 
 ## Wie es funktioniert
@@ -112,6 +118,14 @@ Das Modul bringt den geplanten Job „Mit Shopware synchronisieren“ mit
 einschalten, sobald Verbindung und Sync-Umfang geprüft sind. Dafür muss der
 Dolibarr-Cron eingerichtet sein.
 
+## Entwicklung und Releases
+
+Bei jedem Push prüft die GitHub-CI die Syntax aller PHP-Dateien und ob die
+deutsche und englische Sprachdatei dieselben Schlüssel haben. Das Release-ZIP
+`module_auvoshopware-X.Y.Z.zip` entsteht automatisch, sobald ein Tag `vX.Y.Z`
+gepusht wird (`.github/workflows/release-zip.yml`: Der Tag muss zur
+Modulversion passen, das ZIP ohne `.github/` und `build/` hängt am Release).
+
 ## Changelog
 
 ### 0.16.0 (November 2026)
@@ -120,6 +134,7 @@ Dolibarr-Cron eingerichtet sein.
   AuVo Design (vorher Platzhalter 500000). Nach dem Update das Modul einmal
   deaktivieren und wieder aktivieren und die Rechte neu vergeben.
 - README auf Deutsch, Aufräumen der Vorlagen-Dateien.
+- GitHub-CI (PHP-Syntax, Sprachdateien) und automatisches Release-ZIP.
 
 ### 0.15.0 (August 2026)
 
