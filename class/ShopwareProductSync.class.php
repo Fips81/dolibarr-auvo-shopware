@@ -28,8 +28,8 @@ require_once DOL_DOCUMENT_ROOT.'/core/lib/files.lib.php';
  * \ingroup auvoshopware
  * \brief   Push Dolibarr products (scoped by category) to Shopware via the Sync API.
  *
- * First cut (PLAN.md phase 4, "start small"): plain products + images + variants, no category
- * mirroring yet (a follow-up step once this shape is confirmed working live).
+ * Covers products, images, variants (property groups), categories, manufacturer, list price,
+ * purchase price, stock and sales channel visibility.
  */
 class ShopwareProductSync
 {

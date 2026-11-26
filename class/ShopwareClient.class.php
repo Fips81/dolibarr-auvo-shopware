@@ -21,11 +21,8 @@
  * \brief   Thin HTTP client for the Shopware 6 Admin API (OAuth2 client-credentials, REST/JSON).
  *
  * Endpoint shapes below are from Shopware's own Admin API documentation (token endpoint body
- * format, generic entity CRUD routes, /api/_action/sync payload shape) - not yet confirmed
- * against this project's own shop instance with a live request. The first real call made
- * through this class (the "Test connection" button on the module's setup page) is the live
- * verification step; adjust this file if the shop's actual responses differ from what's
- * assumed here (see PLAN.md "Hintergrundwissen" on always verifying API assumptions live).
+ * format, generic entity CRUD routes, /api/_action/sync payload shape). The "Test connection"
+ * button on the module's setup page checks URL and credentials against the configured shop.
  */
 class ShopwareClient
 {
@@ -212,8 +209,7 @@ class ShopwareClient
 	/**
 	 * List the state-machine transitions available from an order's *current* status (GET
 	 * /api/_action/state-machine/order/{orderId}/state) - Shopware's own way to discover valid
-	 * next moves, so callers never have to guess a transition's technical action name (see
-	 * PLAN.md: order status is a real state machine here, unlike PrestaShop's flag system).
+	 * next moves, so callers never have to guess a transition's technical action name.
 	 * Every row shares the same current state in 'fromStateName'; 'toStateName' is where that
 	 * row's 'actionName' would lead.
 	 *
@@ -427,9 +423,9 @@ class ShopwareClient
 
 	/**
 	 * Batch upsert/delete multiple entities of possibly different types in a single request,
-	 * via the Sync API (POST /api/_action/sync). This is the mechanism that solves auvopresta's
-	 * PHP-timeout problem (see PLAN.md): many products/variants/stock updates go out as one
-	 * HTTP round trip instead of one call per record.
+	 * via the Sync API (POST /api/_action/sync): many products/variants/stock updates go out as
+	 * one HTTP round trip instead of one call per record, which keeps large syncs within PHP's
+	 * time limit.
 	 *
 	 * $operations is keyed by an arbitrary operation key chosen by the caller, e.g.:
 	 * [

@@ -5,14 +5,14 @@
 #
 
 # Module label 'ModuleAuVoShopwareName'
-ModuleAuVoShopwareName = AuVoShopware
+ModuleAuVoShopwareName = AuVo Shopware
 # Module description 'ModuleAuVoShopwareDesc'
 ModuleAuVoShopwareDesc = Artikel und Bestellungen mit einem Shopware-6-Shop synchronisieren
 
 #
 # Admin page
 #
-AuVoShopwareSetup = AuVoShopware Einrichtung
+AuVoShopwareSetup = AuVo Shopware Einrichtung
 Settings = Einstellungen
 AuVoShopwareSetupPage = Verbindung zu deinem Shopware-Shop und den Umfang der zu synchronisierenden Artikel konfigurieren.
 AuVoShopwareSyncScope = Sync-Umfang
@@ -48,16 +48,16 @@ AuVoShopwareCategories = Kategorien
 # About page
 #
 About = Über
-AuVoShopwareAbout = Über AuVoShopware
-AuVoShopwareAboutPage = AuVoShopware Info-Seite
+AuVoShopwareAbout = Über AuVo Shopware
+AuVoShopwareAboutPage = AuVo Shopware Info-Seite
 
 #
 # Dashboard / sync page
 #
-AuVoShopwareArea = AuVoShopware
+AuVoShopwareArea = AuVo Shopware
 AuVoShopwareNotConfigured = Die Shopware-Verbindung ist noch nicht vollständig eingerichtet. Bitte zuerst die <a href="%s">Moduleinrichtung</a> abschließen.
 AuVoShopwareSyncCronLabel = Mit Shopware synchronisieren
-AuVoShopwareSyncCronComment = Führt den AuVoShopware-Artikel- und Bestell-Sync aus. Standardmäßig deaktiviert, bis Verbindung und Sync-Umfang in der Einrichtung geprüft wurden.
+AuVoShopwareSyncCronComment = Führt den Artikel- und Bestell-Sync von AuVo Shopware aus. Standardmäßig deaktiviert, bis Verbindung und Sync-Umfang in der Einrichtung geprüft wurden.
 AuVoShopwareSyncAll = Alle synchronisieren
 AuVoShopwareSyncOne = Sync
 AuVoShopwareSyncOneOk = Artikel erfolgreich synchronisiert

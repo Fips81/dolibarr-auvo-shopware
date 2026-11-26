@@ -1,5 +1,5 @@
 <?php
-/* Copyright (C) 2026		SuperAdmin
+/* Copyright (C) 2026		auvo-design <r.vogel@auvo-design.de>
  * Copyright (C) 2025       Frédéric France         <frederic.france@free.fr>
  *
  * This program is free software: you can redistribute it and/or modify

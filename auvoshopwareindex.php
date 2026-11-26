@@ -106,8 +106,7 @@ $isConfigured = getDolGlobalString('AUVOSHOPWARE_SW_URL')
 if (in_array($action, array('syncall', 'syncone', 'fetchorders', 'pushinvoices'), true) && function_exists('set_time_limit')
 	&& stripos((string) ini_get('disable_functions'), 'set_time_limit') === false) {
 	// A large catalog can need minutes of sequential Sync API round trips - well past a typical
-	// web request's default execution time limit (see PLAN.md: this is exactly what crashed
-	// auvopresta mid-sync before batching was in place).
+	// web request's default execution time limit.
 	set_time_limit(0);
 }
 

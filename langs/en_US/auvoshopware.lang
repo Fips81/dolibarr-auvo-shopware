@@ -5,14 +5,14 @@
 #
 
 # Module label 'ModuleAuVoShopwareName'
-ModuleAuVoShopwareName = AuVoShopware
+ModuleAuVoShopwareName = AuVo Shopware
 # Module description 'ModuleAuVoShopwareDesc'
 ModuleAuVoShopwareDesc = Synchronize products and orders with a Shopware 6 shop
 
 #
 # Admin page
 #
-AuVoShopwareSetup = AuVoShopware setup
+AuVoShopwareSetup = AuVo Shopware setup
 Settings = Settings
 AuVoShopwareSetupPage = Configure the connection to your Shopware shop and the scope of products to synchronize.
 AuVoShopwareSyncScope = Synchronization scope
@@ -48,16 +48,16 @@ AuVoShopwareCategories = Categories
 # About page
 #
 About = About
-AuVoShopwareAbout = About AuVoShopware
-AuVoShopwareAboutPage = AuVoShopware about page
+AuVoShopwareAbout = About AuVo Shopware
+AuVoShopwareAboutPage = AuVo Shopware about page
 
 #
 # Dashboard / sync page
 #
-AuVoShopwareArea = AuVoShopware
+AuVoShopwareArea = AuVo Shopware
 AuVoShopwareNotConfigured = The Shopware connection is not fully configured yet. Please complete the <a href="%s">module setup</a> first.
 AuVoShopwareSyncCronLabel = Sync with Shopware
-AuVoShopwareSyncCronComment = Runs AuVoShopware's product and order sync. Disabled by default until the connection and sync scope have been reviewed in the setup page.
+AuVoShopwareSyncCronComment = Runs AuVo Shopware's product and order sync. Disabled by default until the connection and sync scope have been reviewed in the setup page.
 AuVoShopwareSyncAll = Synchronize all
 AuVoShopwareSyncOne = Sync
 AuVoShopwareSyncOneOk = Product synchronized successfully

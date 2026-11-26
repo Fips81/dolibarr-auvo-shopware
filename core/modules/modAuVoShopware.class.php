@@ -2,7 +2,7 @@
 /* Copyright (C) 2004-2018	Laurent Destailleur			<eldy@users.sourceforge.net>
  * Copyright (C) 2018-2019	Nicolas ZABOURI				<info@inovea-conseil.com>
  * Copyright (C) 2019-2024	Frédéric France				<frederic.france@free.fr>
- * Copyright (C) 2026		SuperAdmin
+ * Copyright (C) 2026		auvo-design <r.vogel@auvo-design.de>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,7 +47,7 @@ class modAuVoShopware extends DolibarrModules
 
 		// Id for module (must be unique).
 		// Use here a free id (See in Home -> System information -> Dolibarr for list of used modules id).
-		$this->numero = 500000; // TODO Go on page https://wiki.dolibarr.org/index.php/List_of_modules_id to reserve an id number for your module
+		$this->numero = 194205; // ID block 194202-194211 reserved for AuVo Design (wiki.dolibarr.org, List of modules id).
 
 		// Key text used to identify module (for permissions, menus, etc...)
 		$this->rights_class = 'auvoshopware';
@@ -71,12 +71,12 @@ class modAuVoShopware extends DolibarrModules
 		$this->descriptionlong = "AuVoShopwareDescription";
 
 		// Author
-		$this->editor_name = 'AuVo Design';
-		$this->editor_url = 'www.auvo-design.de';		// Must be an external online web site
+		$this->editor_name = 'auvo-design';
+		$this->editor_url = 'https://auvo-design.de';		// Must be an external online web site
 		$this->editor_squarred_logo = '';					// Must be image filename into the module/img directory followed with @modulename. Example: 'myimage.png@auvoshopware'
 
 		// Possible values for version are: 'development', 'experimental', 'dolibarr', 'dolibarr_deprecated', 'experimental_deprecated' or a version string like 'x.y.z'
-		$this->version = '0.15.0';
+		$this->version = '0.16.0';
 		// Url to the file with your last numberversion of this module
 		//$this->url_last_version = 'http://www.example.com/versionmodule.txt';
 

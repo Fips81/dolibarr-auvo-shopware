@@ -22,9 +22,7 @@ require_once DOL_DOCUMENT_ROOT.'/compta/facture/class/facture.class.php';
  * \file    auvoshopware/class/ShopwareInvoiceSync.class.php
  * \ingroup auvoshopware
  * \brief   Upload the real Dolibarr invoice PDF as an official, customer-visible Shopware order
- *          document (PLAN.md phase 7) - the module's original goal. PrestaShop had no clean way
- *          to attach an externally generated PDF as the shop's own invoice document, only a
- *          free-text note workaround; Shopware's "document" entity is just a plain, API-writable
+ *          document. Shopware's "document" entity is just a plain, API-writable
  *          DAL entity (see DocumentDefinition, ApiAware on documentMediaFileId), so an uploaded
  *          media file can be linked in directly.
  */
@@ -175,7 +173,7 @@ class ShopwareInvoiceSync
 
 	/**
 	 * Best-effort: ensure a custom field set exposing "custom_dolibarr_order_ref" on the order
-	 * entity exists (PLAN.md's original design - a Dolibarr reference visible on the order in
+	 * entity exists (a Dolibarr reference visible on the order in
 	 * Shopware admin, not just buried in a document), then write this invoice's ref into it.
 	 * Not live-verified against a real shop yet (see ShopwareClient's own disclaimer on
 	 * unverified API assumptions) - failures here are logged into $this->error but deliberately
